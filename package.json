@@ -1,0 +1,17 @@
+{
+  "name": "sentinela-proxy",
+  "version": "1.0.0",
+  "description": "Proxy para Google Fact Check API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "csv-parser": "^3.2.1",
+    "express": "^4.18.2",
+    "node-fetch": "^2.6.7"
+  },
+  "author": "Equipe HackaNAV",
+  "license": "MIT"
+}
