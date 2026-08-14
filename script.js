@@ -43,11 +43,17 @@ async function traduzirParaIngles(texto) {
 let BASE_CONHECIMENTO = [];
 
 // Carrega a base diretamente do window (arquivo conhecimento.js)
-if (window.BASE_CONHECIMENTO) {
+if (typeof window.BASE_CONHECIMENTO !== 'undefined' && window.BASE_CONHECIMENTO) {
     BASE_CONHECIMENTO = window.BASE_CONHECIMENTO;
     console.log('✅ Base carregada do window:', BASE_CONHECIMENTO.length, 'fatos.');
 } else {
-    console.warn('⚠️ Base não encontrada no window. Certifique-se de que conhecimento.js está carregado.');
+    console.warn('⚠️ Base não encontrada no window. O arquivo conhecimento.js pode não ter carregado.');
+    // Tenta carregar do Drive apenas como último recurso, mas com CORS ignorado
+    try {
+        fetch('https://drive.google.com/uc?export=download&id=16VscIwXmnHt8uesA1ccfDaKAPRZHA1us', { mode: 'no-cors' })
+            .then(() => console.warn('⚠️ Drive com no-cors não retorna dados. Use a base local.'))
+            .catch(() => console.warn('⚠️ Drive inacessível. Usando base local.'));
+    } catch (e) {}
 }
 
 // =================================================================
