@@ -42,25 +42,12 @@ async function traduzirParaIngles(texto) {
 
 let BASE_CONHECIMENTO = [];
 
-// Tenta carregar do window (base local)
+// Carrega a base diretamente do window (arquivo conhecimento.js)
 if (window.BASE_CONHECIMENTO) {
     BASE_CONHECIMENTO = window.BASE_CONHECIMENTO;
     console.log('✅ Base carregada do window:', BASE_CONHECIMENTO.length, 'fatos.');
 } else {
-    console.warn('⚠️ Base não encontrada no window.');
-    // Tenta carregar do Drive (fallback)
-    fetch('https://drive.google.com/uc?export=download&id=16VscIwXmnHt8uesA1ccfDaKAPRZHA1us')
-        .then(res => res.json())
-        .then(dados => {
-            BASE_CONHECIMENTO = dados;
-            console.log('✅ Base carregada do Drive:', BASE_CONHECIMENTO.length, 'fatos.');
-        })
-        .catch(() => {
-            console.warn('⚠️ Falha ao carregar do Drive. Usando window.');
-            if (window.BASE_CONHECIMENTO) {
-                BASE_CONHECIMENTO = window.BASE_CONHECIMENTO;
-            }
-        });
+    console.warn('⚠️ Base não encontrada no window. Certifique-se de que conhecimento.js está carregado.');
 }
 
 // =================================================================
