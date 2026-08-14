@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="escuro">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes" />
+    <meta name="theme-color" content="#0b1d3a" />
+    <meta name="description" content="Sentinela da Verdade - Verificador de Fake News com IA e Robótica" />
+    <title>🛡️ Sentinela da Verdade</title>
+    <link rel="stylesheet" href="style.css" />
+    
+
+    <!-- ===== CABEÇALHO ===== -->
+    <header>
+        <div class="header-content">
+            <h1>🛡️ Sentinela da Verdade <span class="badge">v3.0</span></h1>
+            <p>Verifique se uma informação é verdadeira ou falsa</p>
+            <div class="header-actions">
+                <button id="btnModoEscuro" aria-label="Alternar tema">🌙</button>
+                <button id="btnExportarDados" aria-label="Exportar dados">📤</button>
+                <button id="btnResetarDados" aria-label="Resetar dados" class="perigo-pequeno">🔄</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ===== MENU ===== -->
+    <nav>
+        <a href="#analise" class="active">🔎 Verificar</a>
+        <a href="#jogo">🎮 Missão</a>
+        <a href="#dashboard">📊 Dashboard</a>
+        <a href="#robotica">🤖 Robótica</a>
+        <a href="#historico">📜 Histórico</a>
+    </nav>
+
+    <!-- ===== SEÇÃO: VERIFICAR ===== -->
+    <section id="analise" class="card">
+        <h2>🔍 Verifique uma informação</h2>
+        <div class="analise-container">
+            <textarea id="textoNoticia" placeholder="Cole ou digite uma informação aqui..." rows="4"></textarea>
+            <div class="botoes-analise">
+                <button id="btnAnalisar">🔍 Verificar</button>
+                <button id="btnLimpar" class="secundario">🗑️ Limpar</button>
+            </div>
+            <div class="exemplos-rapidos">
+                <span>Teste rápido:</span>
+                <button class="btn-exemplo" data-texto="Ganhe R$1000 compartilhando esta mensagem no WhatsApp!">💸 Corrente</button>
+                <button class="btn-exemplo" data-texto="O Ministério da Saúde publicou hoje novas diretrizes para vacinação em seu site oficial.">🏛️ Oficial</button>
+                <button class="btn-exemplo" data-texto="Amanhã vai faltar água em toda a cidade, segundo uma mensagem que recebi.">💧 Boato</button>
+                <button class="btn-exemplo" data-texto="Alan Turing era inglês.">🧠 Curiosidade</button>
+                <button class="btn-exemplo" data-texto="Vacinas causam autismo, segundo um estudo.">💉 Fake clássica</button>
+            </div>
+        </div>
+
+        <!-- RESULTADO -->
+        <div id="resultado" style="display:none;">
+            <div id="resultadoCabecalho">
+                <span id="resultadoIcone"></span>
+                <span id="resultadoTitulo"></span>
+                <span id="resultadoScore"></span>
+            </div>
+            <div id="resultadoCorpo" style="display:none;">
+                <p id="resultadoMotivo"></p>
+                <button id="btnVerMais" class="secundario">📖 Ver mais ▼</button>
+                <div id="resultadoDetalhes" style="display:none;">
+                    <p><strong>📄 Notícia analisada:</strong></p>
+                    <blockquote id="resultadoTexto"></blockquote>
+                    <p><strong>🧐 Análise detalhada:</strong></p>
+                    <div id="resultadoAnaliseDetalhada"></div>
+                    <p><strong>📊 Score de credibilidade:</strong> <span id="resultadoScoreDetalhado"></span>%</p>
+                    <p class="dica">💡 Esta é uma análise automática. Sempre confira em múltiplas fontes!</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== SEÇÃO: MISSÃO DOS SENTINELAS ===== -->
+    <section id="jogo" class="card">
+        <h2>🎮 Missão dos Sentinelas</h2>
+        <p class="subtitle">Treine seu senso crítico classificando notícias</p>
+        <div class="missao-container">
+            <div class="pergunta-box">
+                <p id="pergunta">Clique em "Nova Missão" para começar</p>
+            </div>
+            <div class="botoes-missao">
+                <button id="novaMissao">🔄 Nova Missão</button>
+                <button id="btnVerdade" class="verde">✅ Verdadeira</button>
+                <button id="btnFake" class="vermelho">❌ Fake</button>
+                <button id="btnSuspeita" class="amarelo">⚠️ Suspeita</button>
+            </div>
+            <div class="placar-missao">
+                <span>⭐ Pontos: <strong id="pontos">0</strong></span>
+                <span>🏅 Medalha: <strong id="medalha">Nenhuma</strong></span>
+                <span>🎯 Acertos: <strong id="acertos">0</strong></span>
+                <span>❌ Erros: <strong id="erros">0</strong></span>
+                <span>🔥 Sequência: <strong id="sequencia">0</strong></span>
+            </div>
+            <div id="feedbackMissao" style="display:none;"></div>
+        </div>
+    </section>
+
+    <!-- ===== SEÇÃO: DASHBOARD ===== -->
+    <section id="dashboard" class="card">
+        <h2>📊 Dashboard</h2>
+        <div class="grid-dashboard">
+            <div class="box"><h3>📰 Analisadas</h3><p id="totalAnalises">0</p></div>
+            <div class="box fake"><h3>🚨 Fake</h3><p id="totalFake">0</p></div>
+            <div class="box verdade"><h3>✅ Verdade</h3><p id="totalVerdade">0</p></div>
+            <div class="box suspeita"><h3>⚠️ Suspeita</h3><p id="totalSuspeita">0</p></div>
+        </div>
+        <div class="grafico-barras">
+            <div class="barra-grafico"><div class="barra-fill" id="barFake" style="width:0%; background:#dc2626;"></div><span>Fake</span></div>
+            <div class="barra-grafico"><div class="barra-fill" id="barVerdade" style="width:0%; background:#16a34a;"></div><span>Verdade</span></div>
+            <div class="barra-grafico"><div class="barra-fill" id="barSuspeita" style="width:0%; background:#eab308;"></div><span>Suspeita</span></div>
+        </div>
+        <div class="relatorio-rapido">
+            <span>🎯 Taxa de acerto: <strong id="taxaAcerto">0%</strong></span>
+            <span>🏆 Maior sequência: <strong id="maiorSequencia">0</strong></span>
+            <span>📅 Média/dia: <strong id="mediaDia">0</strong></span>
+        </div>
+    </section>
+
+    <!-- ===== SEÇÃO: ROBÓTICA ===== -->
+    <section id="robotica" class="card">
+        <h2>🤖 Robótica Educacional</h2>
+        <div class="grid-robotica">
+            <!-- Makey Makey -->
+            <div class="box-robotica">
+                <h3>🎮 Makey Makey</h3>
+                <p><kbd>A</kbd> = Verdadeira &nbsp; <kbd>S</kbd> = Suspeita &nbsp; <kbd>D</kbd> = Fake &nbsp; <kbd>N</kbd> = Nova Missão</p>
+                <p class="status-teclas">✅ Teclas ativas</p>
+            </div>
+            <!-- Micro:bit -->
+            <div class="box-robotica">
+                <h3>📟 Micro:bit</h3>
+                <div class="led-grid" id="ledGrid">
+                    <span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span>
+                    <span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span>
+                    <span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span>
+                    <span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span>
+                    <span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span><span class="led"></span>
+                </div>
+                <p id="statusMicro">🔴 Desconectado (Simulação)</p>
+                <p id="comandoMicro">Último comando: —</p>
+                <button id="conectarMicro">🔗 Conectar (Simulação)</button>
+                <button id="btnTestarMicro" class="secundario">💡 Testar</button>
+            </div>
+            <!-- Sphero -->
+            <div class="box-robotica">
+                <h3>⚪ Sphero Bot</h3>
+                <div id="spheroSim"></div>
+                <div class="controles-sphero">
+                    <button onclick="moverSphero('frente')">⬆</button>
+                    <div><button onclick="moverSphero('esquerda')">⬅</button><button onclick="moverSphero('direita')">➡</button></div>
+                    <button onclick="moverSphero('tras')">⬇</button>
+                </div>
+                <p id="statusSphero">🔴 Desconectado (Simulação)</p>
+                <button id="conectarSphero">🔗 Conectar (Simulação)</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== SEÇÃO: HISTÓRICO ===== -->
+    <section id="historico" class="card">
+        <h2>📜 Verificações recentes</h2>
+        <div id="listaHistorico">
+            <p class="vazio">Nenhuma verificação realizada ainda.</p>
+        </div>
+        <button id="btnLimparHistorico" class="secundario">🗑️ Limpar histórico</button>
+    </section>
+
+    <!-- ===== RODAPÉ ===== -->
+    <footer>
+        <p>🛡️ Sentinela da Verdade — HackaNAV 2026</p>
+        <p class="footer-small">Equipe do 8º ano • 📍 Maranhão • Código aberto com ❤️</p>
+    </footer>
+
+    <!-- ===== JAVASCRIPT ===== -->
+    <script src="conhecimento.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
