@@ -71,16 +71,17 @@ const CONFIG = {
 };
 
 // ================================================================
-// TRADUTOR (usa LibreTranslate - gratuito, sem chave)
+// TRADUTOR (usa Google Translate - gratuito, sem CORS)
 // ================================================================
 
 async function traduzirParaIngles(texto) {
     try {
-        const url = `https://libretranslate.com/translate?q=${encodeURIComponent(texto)}&source=pt&target=en&format=text`;
+        // Usa a API do Google Translate (não tem bloqueio CORS)
+        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=pt&tl=en&dt=t&q=${encodeURIComponent(texto)}`;
         const resposta = await fetch(url);
         const dados = await resposta.json();
-        if (dados.translatedText) {
-            return dados.translatedText;
+        if (dados && dados[0] && dados[0][0]) {
+            return dados[0][0][0];
         }
         console.warn('⚠️ Tradução falhou. Usando texto original.');
         return texto;
