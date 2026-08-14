@@ -42,25 +42,26 @@ async function traduzirParaIngles(texto) {
 
 let BASE_CONHECIMENTO = [];
 
-// Carrega a base de conhecimento do Google Drive
-async function carregarBaseDoDrive() {
-    try {
-        const resposta = await fetch('https://drive.google.com/uc?export=download&id=16VscIwXmnHt8uesA1ccfDaKAPRZHA1us');
-        const dados = await resposta.json();
-        BASE_CONHECIMENTO = dados;
-        console.log('✅ Base carregada do Drive:', BASE_CONHECIMENTO.length, 'fatos.');
-    } catch (erro) {
-        console.warn('⚠️ Falha ao carregar base do Drive:', erro);
-        // Fallback: tenta carregar do window (se já estiver disponível)
-        if (window.BASE_CONHECIMENTO) {
-            BASE_CONHECIMENTO = window.BASE_CONHECIMENTO;
-            console.log('✅ Base carregada do window:', BASE_CONHECIMENTO.length, 'fatos.');
-        }
-    }
+// Tenta carregar do window (base local)
+if (window.BASE_CONHECIMENTO) {
+    BASE_CONHECIMENTO = window.BASE_CONHECIMENTO;
+    console.log('✅ Base carregada do window:', BASE_CONHECIMENTO.length, 'fatos.');
+} else {
+    console.warn('⚠️ Base não encontrada no window.');
+    // Tenta carregar do Drive (fallback)
+    fetch('https://drive.google.com/uc?export=download&id=16VscIwXmnHt8uesA1ccfDaKAPRZHA1us')
+        .then(res => res.json())
+        .then(dados => {
+            BASE_CONHECIMENTO = dados;
+            console.log('✅ Base carregada do Drive:', BASE_CONHECIMENTO.length, 'fatos.');
+        })
+        .catch(() => {
+            console.warn('⚠️ Falha ao carregar do Drive. Usando window.');
+            if (window.BASE_CONHECIMENTO) {
+                BASE_CONHECIMENTO = window.BASE_CONHECIMENTO;
+            }
+        });
 }
-
-// Chama a função para carregar a base
-carregarBaseDoDrive();
 
 // =================================================================
 // 2. PALAVRAS PARA ANÁLISE LOCAL (FALLBACK)
@@ -841,6 +842,60 @@ async function piscarLEDsReal(cor) {
 // --- ESCOLHA (prioriza real, fallback simulação) ---
 const enviarParaMicrobit = USAR_DISPOSITIVOS_REAIS ? enviarParaMicrobitReal : simularMicrobit;
 const piscarLEDs = USAR_DISPOSITIVOS_REAIS ? piscarLEDsReal : simularPiscarLEDs;
+
+// =================================================================
+// 16. PERSISTÊNCIA (com fallback)
+// =================================================================
+
+var memoriaFallback = {};
+
+function salvarDados() {
+    try {
+        localStorage.setItem('sentinelaDados', JSON.stringify(sistema));
+    } catch (e) {
+        console.warn('⚠️ localStorage indisponível. Salvando em memória.');
+        memoriaFallback = JSON.parse(JSON.stringify(sistema));
+    }
+}
+
+function carregarDados() {
+    try {
+        var raw = localStorage.getItem('sentinelaDados');
+        if (raw) {
+            var dados = JSON.parse(raw);
+            Object.assign(sistema, dados);
+            if (!sistema.historicoAnalises) sistema.historicoAnalises = [];
+            renderizarHistorico();
+            atualizarDashboard();
+            return;
+        }
+    } catch (e) {
+        console.warn('⚠️ localStorage indisponível. Usando fallback em memória.');
+    }
+    if (Object.keys(memoriaFallback).length > 0) {
+        Object.assign(sistema, memoriaFallback);
+        renderizarHistorico();
+        atualizarDashboard();
+    }
+}
+
+function resetarDados() {
+    if (!confirm('⚠️ Tem certeza? Todos os dados serão perdidos!')) return;
+    if (!confirm('Última chance!')) return;
+    try {
+        localStorage.removeItem('sentinelaDados');
+    } catch(e) {}
+    memoriaFallback = {};
+    location.reload();
+}
+
+function exportarDados() {
+    var blob = new Blob([JSON.stringify(sistema, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'sentinela_' + new Date().toISOString().slice(0,10) + '.json';
+    a.click();
+}
 
 // --- EVENTOS DO BOTÃO ---
 if (DOM.conectarMicro) {
