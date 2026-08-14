@@ -8,6 +8,60 @@
 // 0. CONFIGURAÇÕES
 // =================================================================
 
+// =================================================================
+// 0.5. PERSISTÊNCIA (DEFINIDA ANTES DE SER USADA)
+// =================================================================
+
+var memoriaFallback = {};
+
+function salvarDados() {
+    try {
+        localStorage.setItem('sentinelaDados', JSON.stringify(sistema));
+    } catch (e) {
+        console.warn('⚠️ localStorage indisponível. Salvando em memória.');
+        memoriaFallback = JSON.parse(JSON.stringify(sistema));
+    }
+}
+
+function carregarDados() {
+    try {
+        var raw = localStorage.getItem('sentinelaDados');
+        if (raw) {
+            var dados = JSON.parse(raw);
+            Object.assign(sistema, dados);
+            if (!sistema.historicoAnalises) sistema.historicoAnalises = [];
+            renderizarHistorico();
+            atualizarDashboard();
+            return;
+        }
+    } catch (e) {
+        console.warn('⚠️ localStorage indisponível. Usando fallback em memória.');
+    }
+    if (Object.keys(memoriaFallback).length > 0) {
+        Object.assign(sistema, memoriaFallback);
+        renderizarHistorico();
+        atualizarDashboard();
+    }
+}
+
+function resetarDados() {
+    if (!confirm('⚠️ Tem certeza? Todos os dados serão perdidos!')) return;
+    if (!confirm('Última chance!')) return;
+    try {
+        localStorage.removeItem('sentinelaDados');
+    } catch(e) {}
+    memoriaFallback = {};
+    location.reload();
+}
+
+function exportarDados() {
+    var blob = new Blob([JSON.stringify(sistema, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'sentinela_' + new Date().toISOString().slice(0,10) + '.json';
+    a.click();
+}
+
 const CONFIG = {
     API_KEY: 'AIzaSyDXlbWtCTFQgx2UjOMRecfR6eiWV_aEhqE',
     API_URL: 'https://factchecktools.googleapis.com/v1alpha1/claims:search',
@@ -836,59 +890,6 @@ async function piscarLEDsReal(cor) {
 const enviarParaMicrobit = USAR_DISPOSITIVOS_REAIS ? enviarParaMicrobitReal : simularMicrobit;
 const piscarLEDs = USAR_DISPOSITIVOS_REAIS ? piscarLEDsReal : simularPiscarLEDs;
 
-// =================================================================
-// 16. PERSISTÊNCIA (com fallback)
-// =================================================================
-
-var memoriaFallback = {};
-
-function salvarDados() {
-    try {
-        localStorage.setItem('sentinelaDados', JSON.stringify(sistema));
-    } catch (e) {
-        console.warn('⚠️ localStorage indisponível. Salvando em memória.');
-        memoriaFallback = JSON.parse(JSON.stringify(sistema));
-    }
-}
-
-function carregarDados() {
-    try {
-        var raw = localStorage.getItem('sentinelaDados');
-        if (raw) {
-            var dados = JSON.parse(raw);
-            Object.assign(sistema, dados);
-            if (!sistema.historicoAnalises) sistema.historicoAnalises = [];
-            renderizarHistorico();
-            atualizarDashboard();
-            return;
-        }
-    } catch (e) {
-        console.warn('⚠️ localStorage indisponível. Usando fallback em memória.');
-    }
-    if (Object.keys(memoriaFallback).length > 0) {
-        Object.assign(sistema, memoriaFallback);
-        renderizarHistorico();
-        atualizarDashboard();
-    }
-}
-
-function resetarDados() {
-    if (!confirm('⚠️ Tem certeza? Todos os dados serão perdidos!')) return;
-    if (!confirm('Última chance!')) return;
-    try {
-        localStorage.removeItem('sentinelaDados');
-    } catch(e) {}
-    memoriaFallback = {};
-    location.reload();
-}
-
-function exportarDados() {
-    var blob = new Blob([JSON.stringify(sistema, null, 2)], { type: 'application/json' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'sentinela_' + new Date().toISOString().slice(0,10) + '.json';
-    a.click();
-}
 
 // --- EVENTOS DO BOTÃO ---
 if (DOM.conectarMicro) {
