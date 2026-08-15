@@ -669,11 +669,7 @@ function analisarLocalComScore(texto, scoreFinal) {
 }
 
 // =================================================================
-// 13. FUNÇÃO PRINCIPAL DE ANÁLISE
-// =================================================================
-
-// =================================================================
-// 13. FUNÇÃO PRINCIPAL DE ANÁLISE (COM TRADUÇÃO)
+// 13. FUNÇÃO PRINCIPAL DE ANÁLISE (COM TRADUÇÃO E BASE PRIORITÁRIA)
 // =================================================================
 
 async function analisarNoticia() {
@@ -690,13 +686,11 @@ async function analisarNoticia() {
     let textoExibicao = texto;
 
     if (temPortugues) {
-        // Mostra "Traduzindo..." para o usuário
         exibirResultado('⏳', 'Traduzindo...', '#2563eb', texto, 'Convertendo para inglês...', 0, 'suspeita');
-        
         try {
             textoBusca = await traduzirParaIngles(texto);
             console.log(`🔄 Traduzido: "${texto}" → "${textoBusca}"`);
-            textoExibicao = texto; // Mantém o texto original para exibição
+            textoExibicao = texto;
         } catch (e) {
             console.warn('⚠️ Tradução falhou, usando texto original.');
             textoBusca = texto;
@@ -707,7 +701,7 @@ async function analisarNoticia() {
         textoExibicao = texto;
     }
 
-    // ---- PASSO 1: BUSCAR NA BASE DE CONHECIMENTO (usando textoBusca) ----
+    // ---- PASSO 1: BUSCAR NA BASE DE CONHECIMENTO (PRIORIDADE MÁXIMA) ----
     const resultadoBase = verificarBaseConhecimento(textoBusca);
     if (resultadoBase.encontrou) {
         const icone = resultadoBase.classificacao === 'verdadeira' ? '✅' :
@@ -717,7 +711,6 @@ async function analisarNoticia() {
         const cor = resultadoBase.classificacao === 'verdadeira' ? '#166534' :
                     resultadoBase.classificacao === 'fake' ? '#991b1b' : '#a16207';
 
-        // Exibe com o texto original (textoExibicao) e a explicação em inglês (ou traduzida)
         exibirResultado(icone, titulo, cor, textoExibicao, resultadoBase.explicacao, resultadoBase.score, resultadoBase.classificacao);
         sistema.analisadas++;
         sistema.ultimaAnalise = Date.now();
@@ -731,10 +724,8 @@ async function analisarNoticia() {
         return;
     }
 
-    // ---- PASSO 2: MOSTRAR "PESQUISANDO..." ----
+    // ---- PASSO 2: TENTAR API DO GOOGLE (se a base não encontrou) ----
     exibirResultado('⏳', 'Pesquisando...', '#2563eb', textoExibicao, 'Buscando em fontes confiáveis...', 0, 'suspeita');
-
-    // ---- PASSO 3: TENTAR API DO GOOGLE (usando textoBusca) ----
     const scoreLocal = calcularScoreLocal(textoBusca);
     const resultadoAPI = await verificarComGoogleFactCheck(textoBusca);
 
@@ -760,10 +751,11 @@ async function analisarNoticia() {
         return;
     }
 
-    // ---- PASSO 4: FALLBACK LOCAL (usando textoBusca) ----
+    // ---- PASSO 3: FALLBACK LOCAL (se nada funcionou) ----
     console.log('⚠️ API não retornou. Usando fallback local.');
     analisarLocalComScore(textoBusca, scoreLocal);
 }
+
 // =================================================================
 // 14. JOGO — MISSÃO DOS SENTINELAS
 // =================================================================
