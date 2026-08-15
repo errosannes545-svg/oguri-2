@@ -80,9 +80,12 @@ async function traduzirParaIngles(texto) {
         const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=pt&tl=en&dt=t&q=${encodeURIComponent(texto)}`;
         const resposta = await fetch(url);
         const dados = await resposta.json();
-        if (dados && dados[0] && dados[0][0]) {
+
+        // O retorno do Google Translate vem em um array aninhado
+        if (dados && dados[0] && dados[0][0] && dados[0][0][0]) {
             return dados[0][0][0];
         }
+
         console.warn('⚠️ Tradução falhou. Usando texto original.');
         return texto;
     } catch (erro) {
@@ -90,7 +93,6 @@ async function traduzirParaIngles(texto) {
         return texto;
     }
 }
-
 // =================================================================
 // 1. CARREGAR BASE DE CONHECIMENTO
 // =================================================================
