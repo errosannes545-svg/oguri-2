@@ -751,7 +751,7 @@ async function analisarNoticia() {
         return;
     }
 
-    // ---- PASSO 3: FALLBACK LOCAL (se nada funcionou) ----
+    // ---- PASSO 4: FALLBACK LOCAL (usando textoBusca) ----
     console.log('⚠️ API não retornou. Usando fallback local.');
     analisarLocalComScore(textoBusca, scoreLocal);
 }
