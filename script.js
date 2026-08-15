@@ -453,23 +453,41 @@ function verificarBaseConhecimento(texto) {
     if (BASE_CONHECIMENTO.length === 0) return { encontrou: false };
 
     const textoLower = texto.toLowerCase().trim();
-    const palavrasUsuario = textoLower.split(/\s+/).filter(p => p.length > 2);
+    const palavrasUsuario = textoLower.split(/\s+/).filter(p => p.length > 3);
 
-    // ----- PASSO 1: CORRESPONDÊNCIA EXATA (prioridade máxima) -----
+    let melhorFato = null;
+    let melhorPontuacao = 0;
+
     for (const fato of BASE_CONHECIMENTO) {
         const perguntaFato = fato.pergunta.toLowerCase();
-        if (textoLower.includes(perguntaFato)) {
-            const palavrasFato = perguntaFato.split(/\s+/);
-            if (palavrasFato.length >= 3 || textoLower === perguntaFato) {
-                return {
-                    encontrou: true,
-                    classificacao: fato.resposta,
-                    explicacao: fato.explicacao,
-                    score: 95,
-                };
+        let pontuacao = 0;
+
+        // Conta quantas palavras significativas do usuário aparecem na pergunta do fato
+        for (const pUser of palavrasUsuario) {
+            if (perguntaFato.includes(pUser)) {
+                pontuacao++;
             }
         }
+
+        // Se a pontuação for maior que a melhor e tiver pelo menos 2 palavras coincidentes
+        if (pontuacao > melhorPontuacao && pontuacao >= 2) {
+            melhorPontuacao = pontuacao;
+            melhorFato = fato;
+        }
     }
+
+    if (melhorFato) {
+        const confidence = melhorPontuacao >= 4 ? 85 : 70;
+        return {
+            encontrou: true,
+            classificacao: melhorFato.resposta,
+            explicacao: melhorFato.explicacao,
+            score: confidence,
+        };
+    }
+
+    return { encontrou: false };
+}
 
     // ----- PASSO 2: BUSCA POR PALAVRAS-CHAVE (mais tolerante) -----
     let melhorFato = null;
