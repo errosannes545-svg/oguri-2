@@ -523,7 +523,6 @@ function verificarBaseConhecimento(texto) {
 
     if (melhorFato) {
         const confidence = melhorPontuacao >= 3 ? 85 : 70;
-        return {
             encontrou: true,
             classificacao: melhorFato.resposta,
             explicacao: melhorFato.explicacao,
