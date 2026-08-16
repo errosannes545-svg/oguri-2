@@ -469,8 +469,8 @@ function verificarBaseConhecimento(texto) {
             }
         }
 
-        // Se a pontuação for maior que a melhor e tiver pelo menos 3 palavras coincidentes
-        if (pontuacao > melhorPontuacao && pontuacao >= 3) {
+        // Se a pontuação for maior que a melhor e tiver pelo menos 2 palavras coincidentes
+        if (pontuacao > melhorPontuacao && pontuacao >= 2) {
             melhorPontuacao = pontuacao;
             melhorFato = fato;
         }
