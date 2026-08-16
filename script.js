@@ -1093,5 +1093,5 @@ setInterval(salvarDados, CONFIG.AUTO_SAVE_INTERVAL);
 
 console.log('🛡️ Sentinela da Verdade v9.0 carregado!');
 console.log('📚 Base:', BASE_CONHECIMENTO.length, 'fatos.');
-console.log('🔑 API Key:', CONFIG.API_KEY ? '✅ Configurada' : '❌ Não configurada');format document
+console.log('🔑 API Key:', CONFIG.API_KEY ? '✅ Configurada' : '❌ Não configurada');
 console.log('✅ Fim do script');
