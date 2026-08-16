@@ -679,22 +679,36 @@ async function analisarNoticia() {
         return;
     }
 
-    // ---- PASSO 2: TENTAR API DO GOOGLE (se a base não encontrou) ----
-/*
-exibirResultado('⏳', 'Pesquisando...', '#2563eb', textoExibicao, 'Buscando em fontes confiáveis...', 0, 'suspeita');
-const scoreLocal = calcularScoreLocal(textoBusca);
-const resultadoAPI = await verificarComGoogleFactCheck(textoBusca);
+       // ---- PASSO 2: TENTAR API DO GOOGLE (se a base não encontrou) ----
+    // A API está desativada temporariamente
+    // exibirResultado('⏳', 'Pesquisando...', '#2563eb', textoExibicao, 'Buscando em fontes confiáveis...', 0, 'suspeita');
+    const scoreLocal = calcularScoreLocal(textoBusca);
+    /*
+    const resultadoAPI = await verificarComGoogleFactCheck(textoBusca);
 
-if (resultadoAPI && resultadoAPI.encontrou) {
-    // ... todo o bloco da API
-}
-*/
-
-    // ---- PASSO 4: FALLBACK LOCAL (usando textoBusca) ----
-    console.log('⚠️ API não retornou. Usando fallback local.');
-    analisarLocalComScore(textoBusca, scoreLocal);
-}
-
+    if (resultadoAPI && resultadoAPI.encontrou) {
+        const scoreAPI = resultadoAPI.scoreReferencia || CONFIG.SCORE_API_REF;
+        const scoreFinal = Math.round((scoreAPI * 0.7) + (scoreLocal * 0.3));
+        const icone2 = resultadoAPI.classificacao === 'verdadeira' ? '✅' :
+                       resultadoAPI.classificacao === 'fake' ? '❌' : '⚠️';
+        const titulo2 = resultadoAPI.classificacao === 'verdadeira' ? 'Verdadeira' :
+                        resultadoAPI.classificacao === 'fake' ? 'Falsa' : 'Suspeita';
+        const cor2 = resultadoAPI.classificacao === 'verdadeira' ? '#166534' :
+                     resultadoAPI.classificacao === 'fake' ? '#991b1b' : '#a16207';
+        exibirResultado(icone2, titulo2, cor2, textoExibicao, resultadoAPI.explicacao, scoreFinal, resultadoAPI.classificacao);
+        sistema.analisadas++;
+        sistema.ultimaAnalise = Date.now();
+        if (resultadoAPI.classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
+        else if (resultadoAPI.classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
+        else { sistema.suspeitas++; sistema.pontos += 5; }
+        adicionarAoHistorico(textoExibicao, resultadoAPI.classificacao, resultadoAPI.explicacao, scoreFinal);
+        atualizarDashboard();
+        salvarDados();
+        if (DOM.textoNoticia) DOM.textoNoticia.value = '';
+        return;
+    }
+    */
+   
 // =================================================================
 // 14. JOGO — MISSÃO DOS SENTINELAS
 // =================================================================
