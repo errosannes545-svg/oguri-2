@@ -630,30 +630,31 @@ function analisarLocalComScore(texto, scoreFinal) {
 async function analisarNoticia() {
     if (!DOM.textoNoticia) return;
     let texto = DOM.textoNoticia.value.trim();
-    // ---- FATOS DE EMERGÊNCIA (RESPOSTA DIRETA) ----
-const fatosEmergencia = [
-    { pergunta: 'vacinas causam autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento e retratado. Fonte: OMS, CDC.' },
-    { pergunta: 'vacina causa autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento. Fonte: OMS.' },
-];
-
-const textoLower = texto.toLowerCase();
-for (const fato of fatosEmergencia) {
-    if (textoLower.includes(fato.pergunta)) {
-        exibirResultado('❌', 'Falsa', '#991b1b', texto, fato.explicacao, 95, 'fake');
-        sistema.analisadas++;
-        sistema.ultimaAnalise = Date.now();
-        sistema.fake++;
-        sistema.pontos += 15;
-        adicionarAoHistorico(texto, 'fake', fato.explicacao, 95);
-        atualizarDashboard();
-        salvarDados();
-        DOM.textoNoticia.value = '';
-        return;
-    }
-}
     if (!texto) {
         exibirResultadoErro('⚠️ Digite uma informação para verificar.');
         return;
+    }
+
+    // ---- FATOS DE EMERGÊNCIA (RESPOSTA DIRETA) ----
+    const fatosEmergencia = [
+        { pergunta: 'vacinas causam autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento e retratado. Fonte: OMS, CDC.' },
+        { pergunta: 'vacina causa autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento. Fonte: OMS.' },
+    ];
+
+    const textoLower = texto.toLowerCase();
+    for (const fato of fatosEmergencia) {
+        if (textoLower.includes(fato.pergunta)) {
+            exibirResultado('❌', 'Falsa', '#991b1b', texto, fato.explicacao, 95, 'fake');
+            sistema.analisadas++;
+            sistema.ultimaAnalise = Date.now();
+            sistema.fake++;
+            sistema.pontos += 15;
+            adicionarAoHistorico(texto, 'fake', fato.explicacao, 95);
+            atualizarDashboard();
+            salvarDados();
+            DOM.textoNoticia.value = '';
+            return;
+        }
     }
 
     // ---- DETECTA SE É PORTUGUÊS (tem acentos ou ç) ----
@@ -700,7 +701,7 @@ for (const fato of fatosEmergencia) {
         return;
     }
 
-       // ---- PASSO 2: TENTAR API DO GOOGLE (se a base não encontrou) ----
+    // ---- PASSO 2: TENTAR API DO GOOGLE (se a base não encontrou) ----
     // A API está desativada temporariamente
     // exibirResultado('⏳', 'Pesquisando...', '#2563eb', textoExibicao, 'Buscando em fontes confiáveis...', 0, 'suspeita');
     const scoreLocal = calcularScoreLocal(textoBusca);
@@ -708,27 +709,14 @@ for (const fato of fatosEmergencia) {
     const resultadoAPI = await verificarComGoogleFactCheck(textoBusca);
 
     if (resultadoAPI && resultadoAPI.encontrou) {
-        const scoreAPI = resultadoAPI.scoreReferencia || CONFIG.SCORE_API_REF;
-        const scoreFinal = Math.round((scoreAPI * 0.7) + (scoreLocal * 0.3));
-        const icone2 = resultadoAPI.classificacao === 'verdadeira' ? '✅' :
-                       resultadoAPI.classificacao === 'fake' ? '❌' : '⚠️';
-        const titulo2 = resultadoAPI.classificacao === 'verdadeira' ? 'Verdadeira' :
-                        resultadoAPI.classificacao === 'fake' ? 'Falsa' : 'Suspeita';
-        const cor2 = resultadoAPI.classificacao === 'verdadeira' ? '#166534' :
-                     resultadoAPI.classificacao === 'fake' ? '#991b1b' : '#a16207';
-        exibirResultado(icone2, titulo2, cor2, textoExibicao, resultadoAPI.explicacao, scoreFinal, resultadoAPI.classificacao);
-        sistema.analisadas++;
-        sistema.ultimaAnalise = Date.now();
-        if (resultadoAPI.classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
-        else if (resultadoAPI.classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
-        else { sistema.suspeitas++; sistema.pontos += 5; }
-        adicionarAoHistorico(textoExibicao, resultadoAPI.classificacao, resultadoAPI.explicacao, scoreFinal);
-        atualizarDashboard();
-        salvarDados();
-        if (DOM.textoNoticia) DOM.textoNoticia.value = '';
-        return;
+        // ... todo o bloco da API (comentado)
     }
     */
+
+    // ---- PASSO 4: FALLBACK LOCAL (usando textoBusca) ----
+    console.log('⚠️ API não retornou. Usando fallback local.');
+    analisarLocalComScore(textoBusca, scoreLocal);
+}
 
 // =================================================================
 // 14. JOGO — MISSÃO DOS SENTINELAS
