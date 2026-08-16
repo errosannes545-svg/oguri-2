@@ -630,6 +630,27 @@ function analisarLocalComScore(texto, scoreFinal) {
 async function analisarNoticia() {
     if (!DOM.textoNoticia) return;
     let texto = DOM.textoNoticia.value.trim();
+    // ---- FATOS DE EMERGÊNCIA (RESPOSTA DIRETA) ----
+const fatosEmergencia = [
+    { pergunta: 'vacinas causam autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento e retratado. Fonte: OMS, CDC.' },
+    { pergunta: 'vacina causa autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento. Fonte: OMS.' },
+];
+
+const textoLower = texto.toLowerCase();
+for (const fato of fatosEmergencia) {
+    if (textoLower.includes(fato.pergunta)) {
+        exibirResultado('❌', 'Falsa', '#991b1b', texto, fato.explicacao, 95, 'fake');
+        sistema.analisadas++;
+        sistema.ultimaAnalise = Date.now();
+        sistema.fake++;
+        sistema.pontos += 15;
+        adicionarAoHistorico(texto, 'fake', fato.explicacao, 95);
+        atualizarDashboard();
+        salvarDados();
+        DOM.textoNoticia.value = '';
+        return;
+    }
+}
     if (!texto) {
         exibirResultadoErro('⚠️ Digite uma informação para verificar.');
         return;
@@ -708,7 +729,7 @@ async function analisarNoticia() {
         return;
     }
     */
-   
+
 // =================================================================
 // 14. JOGO — MISSÃO DOS SENTINELAS
 // =================================================================
