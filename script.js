@@ -488,50 +488,6 @@ function verificarBaseConhecimento(texto) {
 
     return { encontrou: false };
 }
-
-    // ----- PASSO 2: BUSCA POR PALAVRAS-CHAVE (mais tolerante) -----
-    let melhorFato = null;
-    let melhorPontuacao = 0;
-
-    for (const fato of BASE_CONHECIMENTO) {
-        const perguntaFato = fato.pergunta.toLowerCase();
-        let pontuacao = 0;
-
-        // Conta quantas palavras significativas do usuário aparecem no fato
-        for (const pUser of palavrasUsuario) {
-            if (perguntaFato.includes(pUser) || pUser.includes(perguntaFato)) {
-                pontuacao++;
-                continue;
-            }
-            // Tenta cada palavra do fato
-            const palavrasFato = perguntaFato.split(/\s+/);
-            for (const pFato of palavrasFato) {
-                if (pFato.length > 2 && (pUser === pFato || pUser.includes(pFato) || pFato.includes(pUser))) {
-                    pontuacao++;
-                    break;
-                }
-            }
-        }
-
-        // Exige apenas 1 palavra coincidente e proporção de 30%
-        const proporcao = palavrasUsuario.length > 0 ? pontuacao / palavrasUsuario.length : 0;
-        if (proporcao >= 0.3 && pontuacao > melhorPontuacao) {
-            melhorPontuacao = pontuacao;
-            melhorFato = fato;
-        }
-    }
-
-    if (melhorFato) {
-        const confidence = melhorPontuacao >= 3 ? 85 : 70;
-            encontrou: true,
-            classificacao: melhorFato.resposta,
-            explicacao: melhorFato.explicacao,
-            score: confidence,
-        };
-    }
-
-    return { encontrou: false };
-}
     
 
 // =================================================================
