@@ -423,7 +423,7 @@ async function analisarComIA(texto) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'llama-3.1-8b-instant',
+                model: 'model: 'llama3-8b-8192',',
                 messages: [
                     {
                         role: 'system',
