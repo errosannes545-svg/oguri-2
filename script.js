@@ -409,11 +409,9 @@ function verificarBaseConhecimento(texto) {
 async function analisarComIA(texto) {
     const GROQ_API_KEY = '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';
 
-    // Modelos preferidos (mais atuais e confiáveis)
     const modelosPreferidos = [
-        'qwen/qwen3.6-27b',           // Modelo Qwen 27B (mais atual)
-        'openai/gpt-oss-20b',         // Modelo OpenAI OSS 20B
-        'groq/compound-mini'          // Último recurso
+        'qwen/qwen3.6-27b',
+        'openai/gpt-oss-20b'
     ];
 
     for (const modelo of modelosPreferidos) {
@@ -431,7 +429,7 @@ async function analisarComIA(texto) {
                     messages: [
                         {
                             role: 'system',
-                            content: `Hoje é ${new Date().toLocaleDateString('pt-BR')}. Você é um verificador de fatos com conhecimento até essa data. Analise a afirmação do usuário e classifique como "verdadeira", "fake" ou "suspeita". Se a afirmação for sobre algo que aconteceu após seu corte de conhecimento, responda "suspeita" e explique que não tem dados suficientes. Responda APENAS com JSON: {"classificacao":"verdadeira|fake|suspeita", "score":0-100, "explicacao":"texto curto em português"}`
+                            content: `Hoje é ${new Date().toLocaleDateString('pt-BR')}. Você é um verificador de fatos. Analise a afirmação do usuário e classifique como "verdadeira", "fake" ou "suspeita". Responda APENAS com um JSON válido, sem texto antes ou depois, no formato: {"classificacao":"verdadeira|fake|suspeita", "score":0-100, "explicacao":"texto curto em português"}`
                         },
                         { role: 'user', content: texto }
                     ],
@@ -446,73 +444,58 @@ async function analisarComIA(texto) {
                 continue;
             }
 
-            const conteudoBruto = dados.choices?.[0]?.message?.content || '';
-const conteudo = conteudoBruto.replace(/```json/gi, '').replace(/```/g, '').trim();
-let json;
-try {
-    const inicio = conteudo.indexOf('{');
-    const fim = conteudo.lastIndexOf('}');
-    if (inicio !== -1 && fim !== -1 && fim > inicio) {
-        json = JSON.parse(conteudo.substring(inicio, fim + 1));
-    } else {
-        throw new Error('JSON não encontrado');
-    }
-} catch (e) {
-    const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
-        (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
-    return {
-        encontrou: true,
-        classificacao,
-        explicacao: conteudo.substring(0, 300) || 'Análise concluída.',
-        score: 70
-    };
-}
-
-// Normaliza o score (0.95 → 95)
-let scoreFinal = 70;
-if (typeof json.score === 'number') {
-    if (json.score > 0 && json.score <= 1) {
-        scoreFinal = Math.round(json.score * 100);
-    } else {
-        scoreFinal = Math.round(json.score);
-    }
-}
-
-return {
-    encontrou: true,
-    classificacao: json.classificacao || 'suspeita',
-    explicacao: json.explicacao || 'Análise concluída.',
-    score: scoreFinal
-};
-
-            return {
-                encontrou: true,
-                classificacao: json.classificacao || 'suspeita',
-                explicacao: json.explicacao || 'Análise concluída.',
-                score: json.score || 70
-            };
+            const conteudo = dados.choices?.[0]?.message?.content || '';
+            const jsonRegex = /\{\s*"classificacao"\s*:\s*"(verdadeira|fake|suspeita)"\s*,\s*"score"\s*:\s*(\d+(?:\.\d+)?)\s*,\s*"explicacao"\s*:\s*"([\s\S]*?)"\s*\}/i;
+            const match = conteudo.match(jsonRegex);
+            if (match) {
+                let score = parseFloat(match[2]);
+                if (score > 0 && score <= 1) score = Math.round(score * 100);
+                else score = Math.round(score);
+                return {
+                    encontrou: true,
+                    classificacao: match[1],
+                    explicacao: match[3] || 'Análise concluída.',
+                    score: score
+                };
+            }
+            console.warn(`⚠️ JSON não extraído do modelo ${modelo}, tentando próximo...`);
         } catch (erro) {
             console.warn(`⚠️ Erro no ${modelo}:`, erro.message);
             continue;
         }
     }
 
-    // Fallback local
-    const scoreLocal = calcularScoreLocal(texto);
-    let classificacaoLocal = 'suspeita';
-    if (scoreLocal < 40) classificacaoLocal = 'fake';
-    else if (scoreLocal >= 70) classificacaoLocal = 'verdadeira';
-    const explicacaoLocal = `Análise local: ${scoreLocal}% de confiança. ` +
-        (classificacaoLocal === 'fake' ? 'Palavras suspeitas encontradas.' :
-         classificacaoLocal === 'verdadeira' ? 'Fontes confiáveis detectadas.' :
-         'Sem fontes claras.');
+    // Se falhar, tenta Google Fact Check
+    try {
+        exibirResultado('🧠', 'Consultando Google Fact Check...', '#2563eb', texto, 'Verificando base...', 0, 'suspeita');
+        const url = `https://factchecktools.googleapis.com/v1alpha1/claims:search?query=${encodeURIComponent(texto)}&key=${CONFIG.API_KEY}`;
+        const respostaGoogle = await fetch(url);
+        const dadosGoogle = await respostaGoogle.json();
 
-    return {
-        encontrou: true,
-        classificacao: classificacaoLocal,
-        explicacao: explicacaoLocal,
-        score: scoreLocal
-    };
+        if (respostaGoogle.ok && dadosGoogle.claims && dadosGoogle.claims.length > 0) {
+            const claim = dadosGoogle.claims[0];
+            const review = claim.claimReview?.[0];
+            const rating = review?.textualRating || '';
+            const publisher = review?.publisher?.name || 'Agência de fact-checking';
+
+            let classificacao = 'suspeita';
+            let score = 70;
+            if (/false|falso|mentira|fake|enganoso|incorreto|impreciso/i.test(rating)) {
+                classificacao = 'fake';
+                score = 90;
+            } else if (/true|verdade|correto|verdadeiro|real|preciso/i.test(rating)) {
+                classificacao = 'verdadeira';
+                score = 95;
+            }
+
+            const explicacao = `🔍 ${claim.text || 'Alegação verificada'} — ${rating} (${publisher})`;
+            return { encontrou: true, classificacao, explicacao, score };
+        }
+    } catch (e) {
+        console.warn('⚠️ Google Fact Check falhou:', e.message);
+    }
+
+    return { encontrou: false };
 }
 
 function analisarLocalComScore(texto, score) {
@@ -550,12 +533,18 @@ async function analisarNoticia() {
     }
    
     // Fatos atuais (pós-treino dos modelos)
-    const fatosAtuais = [
-        { chave: 'espanha é bicampeã', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026, tornando-se bicampeã mundial.' },
-        { chave: 'espanha venceu a copa de 2026', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026.' },
-        { chave: 'espanha ganhou a copa de 2026', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026.' },
-        { chave: 'espanha é campeã do mundo', resp: 'verdadeira', expl: '✅ A Espanha é a atual campeã mundial (2026), após vencer a Copa de 2026.' }
-    ];
+    cconst fatosAtuais = [
+    { chave: 'espanha é bicampeã', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026, tornando-se bicampeã mundial.' },
+    { chave: 'espanha é bicampea', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026, tornando-se bicampeã mundial.' },
+    { chave: 'espanha venceu a copa de 2026', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026.' },
+    { chave: 'espanha ganhou a copa de 2026', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026.' },
+    { chave: 'espanha é campeã do mundo', resp: 'verdadeira', expl: '✅ A Espanha é a atual campeã mundial (2026).' },
+    { chave: 'espanha é campea do mundo', resp: 'verdadeira', expl: '✅ A Espanha é a atual campeã mundial (2026).' },
+    { chave: 'tem uranio nas vacinas', resp: 'fake', expl: '❌ Falso! Não há evidências científicas de urânio em vacinas.' },
+    { chave: 'vacinas tem uranio', resp: 'fake', expl: '❌ Falso! Não há evidências científicas de urânio em vacinas.' },
+    { chave: 'vacina tem uranio', resp: 'fake', expl: '❌ Falso! Não há evidências científicas de urânio em vacinas.' },
+    { chave: 'uranio nas vacinas', resp: 'fake', expl: '❌ Falso! Não há evidências científicas de urânio em vacinas.' }
+];
     for (const fato of fatosAtuais) {
         if (texto.toLowerCase().includes(fato.chave)) {
             exibirResultado('✅', 'Verdadeira', '#166534', texto, fato.expl, 98, 'verdadeira');
