@@ -412,78 +412,91 @@ function verificarBaseConhecimento(texto) {
 
 const GROQ_API_KEY = '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';
 
+async function obterModelosGroq() {
+    const resposta = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: { 'Authorization': 'Bearer ' + GROQ_API_KEY }
+    });
+    const dados = await resposta.json();
+    return dados.data ? dados.data.map(m => m.id) : [];
+}
+
 async function analisarComIA(texto) {
-    const modelos = [
-        'llama-3.3-70b-versatile',   // Modelo atual da Groq
-        'llama-3.2-8b-instant',     // Modelo antigo
-        'llama3-70b-8192',          // Modelo mais antigo
-        'mixtral-8x7b-32768',       // Modelo Mixtral
-        'gemma2-9b-it'              // Modelo Gemma
-    ];
+    try {
+        const todosModelos = await obterModelosGroq();
+        console.log('📋 Modelos Groq disponíveis:', todosModelos);
 
-    // Tenta cada modelo até um funcionar
-    for (const modelo of modelos) {
-        try {
-            exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, `Tentando modelo ${modelo}...`, 0, 'suspeita');
+        // Filtra modelos de chat (ignora TTS, áudio, etc.)
+        const modelos = todosModelos.filter(id => 
+            /llama|gemma|mixtral|qwen|deepseek/i.test(id) && 
+            !/tts|whisper|audio/i.test(id)
+        );
+        const listaModelos = modelos.length > 0 ? modelos : todosModelos;
 
-            const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Authorization': 'Bearer ' + GROQ_API_KEY,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: modelo,
-                    messages: [
-                        {
-                            role: 'system',
-                            content: 'Classifique a notícia como verdadeira, fake ou suspeita. Responda apenas com JSON: {"classificacao":"...", "score":0, "explicacao":"..."}'
-                        },
-                        { role: 'user', content: texto }
-                    ],
-                    temperature: 0.3,
-                    max_tokens: 200
-                })
-            });
-
-            const dados = await resposta.json();
-
-            if (!resposta.ok) {
-                console.warn(`⚠️ Modelo ${modelo} falhou:`, dados.error?.message || 'Erro desconhecido');
-                continue; // tenta o próximo modelo
-            }
-
-            const conteudo = dados.choices?.[0]?.message?.content || '';
-            let json;
+        for (const modelo of listaModelos) {
             try {
-                const match = conteudo.match(/\{[\s\S]*\}/);
-                json = JSON.parse(match ? match[0] : conteudo);
-            } catch (e) {
-                const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
-                    (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
+                exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, `Usando ${modelo}...`, 0, 'suspeita');
+
+                const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + GROQ_API_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: modelo,
+                        messages: [
+                            {
+                                role: 'system',
+                                content: 'Classifique a notícia como verdadeira, fake ou suspeita. Responda apenas com JSON: {"classificacao":"...", "score":0, "explicacao":"..."}'
+                            },
+                            { role: 'user', content: texto }
+                        ],
+                        temperature: 0.3,
+                        max_tokens: 200
+                    })
+                });
+
+                const dados = await resposta.json();
+
+                if (!resposta.ok) {
+                    console.warn(`⚠️ ${modelo} falhou:`, dados.error?.message || 'erro');
+                    continue; // tenta o próximo modelo
+                }
+
+                const conteudo = dados.choices?.[0]?.message?.content || '';
+                let json;
+                try {
+                    const match = conteudo.match(/\{[\s\S]*\}/);
+                    json = JSON.parse(match ? match[0] : conteudo);
+                } catch (e) {
+                    const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
+                        (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
+                    return {
+                        encontrou: true,
+                        classificacao,
+                        explicacao: conteudo.substring(0, 300) || 'Análise concluída.',
+                        score: 70
+                    };
+                }
+
                 return {
                     encontrou: true,
-                    classificacao,
-                    explicacao: conteudo.substring(0, 300) || 'Análise concluída.',
-                    score: 70
+                    classificacao: json.classificacao || 'suspeita',
+                    explicacao: json.explicacao || 'Análise concluída.',
+                    score: json.score || 70
                 };
+            } catch (erro) {
+                console.warn(`⚠️ Erro no ${modelo}:`, erro.message);
+                continue;
             }
-
-            return {
-                encontrou: true,
-                classificacao: json.classificacao || 'suspeita',
-                explicacao: json.explicacao || 'Análise concluída.',
-                score: json.score || 70
-            };
-        } catch (erro) {
-            console.warn(`⚠️ Erro no modelo ${modelo}:`, erro.message);
-            continue;
         }
+    } catch (e) {
+        console.warn('⚠️ Não foi possível obter modelos Groq:', e.message);
     }
 
-    // Se todos os modelos falharem, tenta Google Fact Check Tools (API real)
+    // Google Fact Check Tools (API real de fact-checking)
     try {
-        exibirResultado('🧠', 'Consultando Google Fact Check...', '#2563eb', texto, 'Verificando base de fact-checking...', 0, 'suspeita');
+        exibirResultado('🧠', 'Consultando Google Fact Check...', '#2563eb', texto, 'Verificando base...', 0, 'suspeita');
         const url = `https://factchecktools.googleapis.com/v1alpha1/claims:search?query=${encodeURIComponent(texto)}&key=${CONFIG.API_KEY}`;
         const respostaGoogle = await fetch(url);
         const dadosGoogle = await respostaGoogle.json();
@@ -493,7 +506,6 @@ async function analisarComIA(texto) {
             const review = claim.claimReview?.[0];
             const rating = review?.textualRating || '';
             const publisher = review?.publisher?.name || 'Agência de fact-checking';
-            const urlFonte = review?.url || '';
 
             let classificacao = 'suspeita';
             let score = 70;
@@ -505,128 +517,14 @@ async function analisarComIA(texto) {
                 score = 95;
             }
 
-            const explicacao = `🔍 ${claim.text || 'Alegação verificada'} — ${rating} (${publisher}) ${urlFonte ? 'Fonte: ' + urlFonte : ''}`;
+            const explicacao = `🔍 ${claim.text || 'Alegação verificada'} — ${rating} (${publisher})`;
             return { encontrou: true, classificacao, explicacao, score };
         }
     } catch (e) {
         console.warn('⚠️ Google Fact Check falhou:', e.message);
     }
 
-    // Se tudo falhar, retorna falso e o fallback local assume
     return { encontrou: false };
-}
-
-// ================================================================
-// FUNÇÃO PRINCIPAL DE ANÁLISE
-// ================================================================
-
-async function analisarNoticia() {
-    if (!DOM.textoNoticia) return;
-    const texto = DOM.textoNoticia.value.trim();
-    if (!texto) {
-        exibirResultadoErro('⚠️ Digite uma informação para verificar.');
-        return;
-    }
-
-    // 1. Tentar IA
-    const resultadoIA = await analisarComIA(texto);
-    if (resultadoIA.encontrou) {
-        const icone = resultadoIA.classificacao === 'verdadeira' ? '✅' : resultadoIA.classificacao === 'fake' ? '❌' : '⚠️';
-        const titulo = resultadoIA.classificacao === 'verdadeira' ? 'Verdadeira' : resultadoIA.classificacao === 'fake' ? 'Falsa' : 'Suspeita';
-        const cor = resultadoIA.classificacao === 'verdadeira' ? '#166534' : resultadoIA.classificacao === 'fake' ? '#991b1b' : '#a16207';
-        exibirResultado(icone, titulo, cor, texto, resultadoIA.explicacao, resultadoIA.score, resultadoIA.classificacao);
-        sistema.analisadas++;
-        sistema.ultimaAnalise = Date.now();
-        if (resultadoIA.classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
-        else if (resultadoIA.classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
-        else { sistema.suspeitas++; sistema.pontos += 5; }
-        adicionarAoHistorico(texto, resultadoIA.classificacao, resultadoIA.explicacao, resultadoIA.score);
-        atualizarDashboard();
-        salvarDados();
-        DOM.textoNoticia.value = '';
-        enviarParaMicrobit(resultadoIA.classificacao === 'fake' ? 'F' : resultadoIA.classificacao === 'verdadeira' ? 'V' : 'S');
-        return;
-    }
-
-    // 2. Fatos de emergência
-    const fatosEmergencia = [
-        { pergunta: 'vacinas causam autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento. Fonte: OMS.' },
-        { pergunta: 'vacina causa autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento. Fonte: OMS.' },
-        { pergunta: 'a terra é plana', resposta: 'fake', explicacao: '❌ Falso! Terra é esferoide.' },
-        { pergunta: 'cloroquina cura covid', resposta: 'fake', explicacao: '❌ Falso! Estudos mostraram ineficácia.' },
-        { pergunta: 'o sol é uma estrela', resposta: 'verdadeira', explicacao: '✅ Verdadeiro! Sol é uma estrela.' },
-        { pergunta: 'a lua tem luz própria', resposta: 'fake', explicacao: '❌ Falso! Lua reflete luz do Sol.' }
-    ];
-    const textoLower = texto.toLowerCase();
-    for (const fato of fatosEmergencia) {
-        if (textoLower.includes(fato.pergunta)) {
-            exibirResultado('✅', fato.resposta === 'verdadeira' ? 'Verdadeira' : 'Falsa', fato.resposta === 'verdadeira' ? '#166534' : '#991b1b', texto, fato.explicacao, 95, fato.resposta);
-            sistema.analisadas++;
-            sistema.ultimaAnalise = Date.now();
-            if (fato.resposta === 'fake') { sistema.fake++; sistema.pontos += 15; }
-            else { sistema.verdadeiras++; sistema.pontos += 10; }
-            adicionarAoHistorico(texto, fato.resposta, fato.explicacao, 95);
-            atualizarDashboard();
-            salvarDados();
-            DOM.textoNoticia.value = '';
-            enviarParaMicrobit(fato.resposta === 'fake' ? 'F' : 'V');
-            return;
-        }
-    }
-
-    // 3. Base local
-    const temPortugues = /[áàâãéèêíïóôõúç]/i.test(texto);
-    const textoBusca = temPortugues ? await traduzirParaIngles(texto) : texto;
-    const resultadoBase = verificarBaseConhecimento(textoBusca);
-    if (resultadoBase.encontrou) {
-        exibirResultado(
-            resultadoBase.classificacao === 'verdadeira' ? '✅' : resultadoBase.classificacao === 'fake' ? '❌' : '⚠️',
-            resultadoBase.classificacao === 'verdadeira' ? 'Verdadeira' : resultadoBase.classificacao === 'fake' ? 'Falsa' : 'Suspeita',
-            resultadoBase.classificacao === 'verdadeira' ? '#166534' : resultadoBase.classificacao === 'fake' ? '#991b1b' : '#a16207',
-            texto, resultadoBase.explicacao, resultadoBase.score, resultadoBase.classificacao
-        );
-        sistema.analisadas++;
-        sistema.ultimaAnalise = Date.now();
-        if (resultadoBase.classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
-        else if (resultadoBase.classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
-        else { sistema.suspeitas++; sistema.pontos += 5; }
-        adicionarAoHistorico(texto, resultadoBase.classificacao, resultadoBase.explicacao, resultadoBase.score);
-        atualizarDashboard();
-        salvarDados();
-        DOM.textoNoticia.value = '';
-        enviarParaMicrobit(resultadoBase.classificacao === 'fake' ? 'F' : resultadoBase.classificacao === 'verdadeira' ? 'V' : 'S');
-        return;
-    }
-
-    // 4. Fallback local
-    const scoreLocal = calcularScoreLocal(texto);
-    analisarLocalComScore(texto, scoreLocal);
-}
-
-function analisarLocalComScore(texto, score) {
-    let classificacao = 'suspeita';
-    if (score < 40) classificacao = 'fake';
-    else if (score >= 70) classificacao = 'verdadeira';
-
-    const cor = classificacao === 'verdadeira' ? '#166534' : classificacao === 'fake' ? '#991b1b' : '#a16207';
-    const icone = classificacao === 'verdadeira' ? '✅' : classificacao === 'fake' ? '❌' : '⚠️';
-    const titulo = classificacao === 'verdadeira' ? 'Verdadeira' : classificacao === 'fake' ? 'Falsa' : 'Suspeita';
-    const explicacao = `Análise local: ${score}% de confiança. ` +
-        (classificacao === 'fake' ? 'Palavras suspeitas encontradas.' :
-         classificacao === 'verdadeira' ? 'Fontes confiáveis detectadas.' :
-         'Sem fontes claras.');
-
-    exibirResultado(icone, titulo, cor, texto, explicacao, score, classificacao);
-    sistema.analisadas++;
-    sistema.ultimaAnalise = Date.now();
-    if (classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
-    else if (classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
-    else { sistema.suspeitas++; sistema.pontos += 5; }
-    adicionarAoHistorico(texto, classificacao, explicacao, score);
-    atualizarDashboard();
-    salvarDados();
-    DOM.textoNoticia.value = '';
-    enviarParaMicrobit(classificacao === 'fake' ? 'F' : classificacao === 'verdadeira' ? 'V' : 'S');
 }
 
 // ================================================================
