@@ -533,62 +533,69 @@ async function analisarComIA(texto) {
     }
 }
 
-function analisarLocalComScore(texto, scoreFinal) {
-    var classificacao = 'suspeita',
-        icone = '⚠️',
-        titulo = 'Suspeita',
-        cor = '#a16207';
-    if (scoreFinal >= 70) { classificacao = 'verdadeira';
-        icone = '✅';
-        titulo = 'Verdadeira';
-        cor = '#166534'; } else if (scoreFinal <= 30) { classificacao = 'fake';
-        icone = '❌';
-        titulo = 'Falsa';
-        cor = '#991b1b'; }
+async function analisarComIA(texto) {
+    try {
+        exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, 'Processando com Groq...', 0, 'suspeita');
 
-    var textoLower = texto.toLowerCase();
-    var palavrasSuspeitas = [],
-        palavrasConfiaveis = [];
-    for (var i = 0; i < PALAVRAS_FAKE.length; i++) {
-        if (textoLower.indexOf(PALAVRAS_FAKE[i].palavra) !== -1) palavrasSuspeitas.push(PALAVRAS_FAKE[i].palavra);
-    }
-    for (var j = 0; j < PALAVRAS_CONFIAVEIS.length; j++) {
-        if (textoLower.indexOf(PALAVRAS_CONFIAVEIS[j].palavra) !== -1) palavrasConfiaveis.push(PALAVRAS_CONFIAVEIS[j].palavra);
-    }
+        const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Bearer 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',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'llama3-8b-8192',
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'Classifique a notícia como verdadeira, fake ou suspeita. Responda apenas com JSON: {"classificacao":"...", "score":0, "explicacao":"..."}'
+                    },
+                    {
+                        role: 'user',
+                        content: texto
+                    }
+                ],
+                temperature: 0.3,
+                max_tokens: 200
+            })
+        });
 
-    var motivo = '';
-    if (classificacao === 'fake') {
-        motivo = '🔍 Palavras suspeitas: ' + (palavrasSuspeitas.slice(0, 6).join(', ') || 'nenhuma específica') + '.<br>';
-        motivo += '💡 Não compartilhe! Verifique em sites oficiais.';
-    } else if (classificacao === 'verdadeira') {
-        motivo = '✅ Palavras confiáveis: ' + (palavrasConfiaveis.slice(0, 6).join(', ') || 'termos genéricos') + '.<br>';
-        motivo += '💡 Pode confiar, mas sempre confira a data e o contexto.';
-    } else {
-        motivo = '🔎 Análise inconclusiva.<br>';
-        if (palavrasSuspeitas.length && palavrasConfiaveis.length) {
-            motivo += '⚠️ Conflito entre suspeitas (' + palavrasSuspeitas.slice(0, 4).join(', ') + ') e confiáveis (' + palavrasConfiaveis.slice(0, 4).join(', ') + ').<br>';
-        } else if (palavrasSuspeitas.length) {
-            motivo += '⚠️ Palavras suspeitas: ' + palavrasSuspeitas.slice(0, 5).join(', ') + '.<br>';
-        } else if (palavrasConfiaveis.length) {
-            motivo += 'ℹ️ Palavras confiáveis: ' + palavrasConfiaveis.slice(0, 5).join(', ') + '.<br>';
-        } else {
-            motivo += '📌 Nenhuma palavra-chave forte.<br>';
+        const dados = await resposta.json();
+
+        if (!resposta.ok) {
+            console.error('❌ Erro da Groq:', dados);
+            return { encontrou: false };
         }
-        motivo += '💡 Pesquise em fontes oficiais antes de compartilhar.';
+
+        const conteudo = dados.choices[0].message.content;
+        console.log('🧠 IA respondeu:', conteudo);
+
+        let json;
+        try {
+            const match = conteudo.match(/\{[\s\S]*\}/);
+            json = JSON.parse(match ? match[0] : conteudo);
+        } catch (e) {
+            const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
+                (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
+            return {
+                encontrou: true,
+                classificacao: classificacao,
+                explicacao: conteudo.substring(0, 300),
+                score: 70
+            };
+        }
+
+        return {
+            encontrou: true,
+            classificacao: json.classificacao || 'suspeita',
+            explicacao: json.explicacao || 'Análise concluída.',
+            score: json.score || 70
+        };
+
+    } catch (erro) {
+        console.error('❌ Erro na IA:', erro.message);
+        return { encontrou: false };
     }
-
-    sistema.analisadas++;
-    sistema.ultimaAnalise = Date.now();
-    if (classificacao === 'fake') { sistema.fake++;
-        sistema.pontos += 15; } else if (classificacao === 'verdadeira') { sistema.verdadeiras++;
-        sistema.pontos += 10; } else { sistema.suspeitas++;
-        sistema.pontos += 5; }
-
-    exibirResultado(icone, titulo, cor, texto, motivo, scoreFinal, classificacao);
-    adicionarAoHistorico(texto, classificacao, motivo, scoreFinal);
-    atualizarDashboard();
-    salvarDados();
-    if (DOM.textoNoticia) DOM.textoNoticia.value = '';
 }
 
 // ================================================================
