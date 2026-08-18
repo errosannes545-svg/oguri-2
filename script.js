@@ -1,7 +1,6 @@
-
 /* ================================================================
-   SENTINELA DA VERDADE — script.js (v9.0 - CORRIGIDO)
-   Motor principal com busca inteligente na base de conhecimento
+   SENTINELA DA VERDADE — script.js (v10.0 - FINAL)
+   Motor completo com IA DeepSeek + fallback local
    ================================================================ */
 
 /// =================================================================
@@ -76,16 +75,12 @@ const CONFIG = {
 
 async function traduzirParaIngles(texto) {
     try {
-        // Usa a API do Google Translate (não tem bloqueio CORS)
         const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=pt&tl=en&dt=t&q=${encodeURIComponent(texto)}`;
         const resposta = await fetch(url);
         const dados = await resposta.json();
-
-        // O retorno do Google Translate vem em um array aninhado
         if (dados && dados[0] && dados[0][0] && dados[0][0][0]) {
             return dados[0][0][0];
         }
-
         console.warn('⚠️ Tradução falhou. Usando texto original.');
         return texto;
     } catch (erro) {
@@ -93,24 +88,18 @@ async function traduzirParaIngles(texto) {
         return texto;
     }
 }
+
 // =================================================================
 // 1. CARREGAR BASE DE CONHECIMENTO
 // =================================================================
 
 let BASE_CONHECIMENTO = [];
 
-// Carrega a base diretamente do window (arquivo conhecimento.js)
 if (typeof window.BASE_CONHECIMENTO !== 'undefined' && window.BASE_CONHECIMENTO) {
     BASE_CONHECIMENTO = window.BASE_CONHECIMENTO;
     console.log('✅ Base carregada do window:', BASE_CONHECIMENTO.length, 'fatos.');
 } else {
     console.warn('⚠️ Base não encontrada no window. O arquivo conhecimento.js pode não ter carregado.');
-    // Tenta carregar do Drive apenas como último recurso, mas com CORS ignorado
-    try {
-        fetch('https://drive.google.com/uc?export=download&id=16VscIwXmnHt8uesA1ccfDaKAPRZHA1us', { mode: 'no-cors' })
-            .then(() => console.warn('⚠️ Drive com no-cors não retorna dados. Use a base local.'))
-            .catch(() => console.warn('⚠️ Drive inacessível. Usando base local.'));
-    } catch (e) {}
 }
 
 // =================================================================
@@ -462,14 +451,12 @@ function verificarBaseConhecimento(texto) {
         const perguntaFato = fato.pergunta.toLowerCase();
         let pontuacao = 0;
 
-        // Conta quantas palavras significativas do usuário aparecem na pergunta do fato
         for (const pUser of palavrasUsuario) {
             if (perguntaFato.includes(pUser)) {
                 pontuacao++;
             }
         }
 
-        // Se a pontuação for maior que a melhor e tiver pelo menos 2 palavras coincidentes
         if (pontuacao > melhorPontuacao && pontuacao >= 2) {
             melhorPontuacao = pontuacao;
             melhorFato = fato;
@@ -488,63 +475,86 @@ function verificarBaseConhecimento(texto) {
 
     return { encontrou: false };
 }
-    
 
 // =================================================================
-// 11. CONSULTA À API DO GOOGLE FACT CHECK (DIRETO, SEM PROXY)
+// 11. ANÁLISE COM IA DA DEEPSEEK (API)
 // =================================================================
 
-async function verificarComGoogleFactCheck(texto) {
+// ⚠️ ATENÇÃO: Substitua esta chave pela sua nova chave
+// Se for usar no Vercel, use process.env.DEEPSEEK_API_KEY
+const DEEPSEEK_API_KEY = 'sk-0c9bf1c239e54b52b2f4a95b65cb9cb2';
+
+async function analisarComDeepSeek(texto) {
     try {
-        const query = encodeURIComponent(texto);
-        const url = `https://factchecktools.googleapis.com/v1alpha1/claims:search?query=${query}&key=${CONFIG.API_KEY}`;
-        
-        const resposta = await fetch(url);
+        exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, 'Processando com DeepSeek...', 0, 'suspeita');
+
+        const resposta = await fetch('https://api.deepseek.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'deepseek-chat',
+                messages: [
+                    {
+                        role: 'system',
+                        content: `Você é um verificador de fatos especializado. Analise a notícia fornecida e responda APENAS com um objeto JSON no formato:
+{
+    "classificacao": "verdadeira" ou "fake" ou "suspeita",
+    "score": 0 a 100,
+    "explicacao": "Texto explicativo em português com até 200 caracteres"
+}
+Seja rigoroso. Notícias sem fontes confiáveis ou com indícios de desinformação devem ser classificadas como "fake" ou "suspeita".`
+                    },
+                    {
+                        role: 'user',
+                        content: texto
+                    }
+                ],
+                temperature: 0.3,
+                max_tokens: 300
+            })
+        });
+
         if (!resposta.ok) {
-            console.warn('⚠️ API do Google retornou erro:', resposta.status);
+            console.warn('⚠️ DeepSeek API erro:', resposta.status);
             return { encontrou: false };
         }
 
         const dados = await resposta.json();
+        const conteudo = dados.choices[0].message.content;
+        console.log('🧠 DeepSeek respondeu:', conteudo);
 
-        if (dados.claims && dados.claims.length > 0) {
-            const primeiro = dados.claims[0];
-            const review = primeiro.claimReview[0];
-            const textoRating = (review.textualRating || '').toLowerCase();
-
-            let classificacao = 'suspeita';
-            let scoreBase = 50;
-
-            // Verifica palavras-chave de classificação (multilíngue)
-            if (textoRating.includes('falso') || textoRating.includes('false') || 
-                textoRating.includes('fałsz') || textoRating.includes('errado')) {
-                classificacao = 'fake';
-                scoreBase = 15;
-            } else if (textoRating.includes('verdade') || textoRating.includes('true') || 
-                       textoRating.includes('prawda') || textoRating.includes('correto')) {
-                classificacao = 'verdadeira';
-                scoreBase = 90;
-            } else if (textoRating.includes('parcial') || textoRating.includes('parcialmente')) {
-                classificacao = 'suspeita';
-                scoreBase = 50;
-            } else if (textoRating.includes('enganoso') || textoRating.includes('manipulação')) {
-                classificacao = 'suspeita';
-                scoreBase = 40;
+        let json;
+        try {
+            const match = conteudo.match(/\{[\s\S]*\}/);
+            if (match) {
+                json = JSON.parse(match[0]);
+            } else {
+                json = JSON.parse(conteudo);
             }
-
-            const explicacao = review.review || 'Verificação disponível.';
-            const fonte = review.publisher?.name || 'Fonte não identificada';
-
+        } catch (e) {
+            console.warn('⚠️ Falha ao parsear JSON, usando fallback:', e);
+            const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
+                                 conteudo.includes('fake') || conteudo.includes('falso') ? 'fake' : 'suspeita';
             return {
                 encontrou: true,
                 classificacao: classificacao,
-                explicacao: `${explicacao} (Fonte: ${fonte})`,
-                scoreReferencia: scoreBase,
+                explicacao: conteudo.substring(0, 300),
+                score: 70
             };
         }
-        return { encontrou: false };
+
+        return {
+            encontrou: true,
+            classificacao: json.classificacao || 'suspeita',
+            explicacao: json.explicacao || 'Análise concluída.',
+            score: json.score || 70
+        };
+
     } catch (erro) {
-        console.warn('⚠️ Erro na API:', erro.message);
+        console.error('❌ Erro na DeepSeek API:', erro.message);
         return { encontrou: false };
     }
 }
@@ -624,7 +634,7 @@ function analisarLocalComScore(texto, scoreFinal) {
 }
 
 // =================================================================
-// 13. FUNÇÃO PRINCIPAL DE ANÁLISE (COM TRADUÇÃO E BASE PRIORITÁRIA)
+// 13. FUNÇÃO PRINCIPAL DE ANÁLISE (IA + FALLBACK COMPLETO)
 // =================================================================
 
 async function analisarNoticia() {
@@ -632,6 +642,29 @@ async function analisarNoticia() {
     let texto = DOM.textoNoticia.value.trim();
     if (!texto) {
         exibirResultadoErro('⚠️ Digite uma informação para verificar.');
+        return;
+    }
+
+    // ---- PASSO 1: TENTAR IA DA DEEPSEEK ----
+    const resultadoIA = await analisarComDeepSeek(texto);
+    if (resultadoIA && resultadoIA.encontrou) {
+        const icone = resultadoIA.classificacao === 'verdadeira' ? '✅' :
+                      resultadoIA.classificacao === 'fake' ? '❌' : '⚠️';
+        const titulo = resultadoIA.classificacao === 'verdadeira' ? 'Verdadeira' :
+                       resultadoIA.classificacao === 'fake' ? 'Falsa' : 'Suspeita';
+        const cor = resultadoIA.classificacao === 'verdadeira' ? '#166534' :
+                    resultadoIA.classificacao === 'fake' ? '#991b1b' : '#a16207';
+
+        exibirResultado(icone, titulo, cor, texto, resultadoIA.explicacao, resultadoIA.score, resultadoIA.classificacao);
+        sistema.analisadas++;
+        sistema.ultimaAnalise = Date.now();
+        if (resultadoIA.classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
+        else if (resultadoIA.classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
+        else { sistema.suspeitas++; sistema.pontos += 5; }
+        adicionarAoHistorico(texto, resultadoIA.classificacao, resultadoIA.explicacao, resultadoIA.score);
+        atualizarDashboard();
+        salvarDados();
+        DOM.textoNoticia.value = '';
         return;
     }
 
@@ -657,28 +690,10 @@ async function analisarNoticia() {
         }
     }
 
-    // ---- DETECTA SE É PORTUGUÊS (tem acentos ou ç) ----
+    // ---- PASSO 2: FALLBACK PARA A BASE DE CONHECIMENTO LOCAL ----
     const temPortugues = /[áàâãéèêíïóôõúç]/i.test(texto);
-    let textoBusca = texto;
-    let textoExibicao = texto;
+    let textoBusca = temPortugues ? await traduzirParaIngles(texto) : texto;
 
-    if (temPortugues) {
-        exibirResultado('⏳', 'Traduzindo...', '#2563eb', texto, 'Convertendo para inglês...', 0, 'suspeita');
-        try {
-            textoBusca = await traduzirParaIngles(texto);
-            console.log(`🔄 Traduzido: "${texto}" → "${textoBusca}"`);
-            textoExibicao = texto;
-        } catch (e) {
-            console.warn('⚠️ Tradução falhou, usando texto original.');
-            textoBusca = texto;
-            textoExibicao = texto;
-        }
-    } else {
-        textoBusca = texto;
-        textoExibicao = texto;
-    }
-
-    // ---- PASSO 1: BUSCAR NA BASE DE CONHECIMENTO (PRIORIDADE MÁXIMA) ----
     const resultadoBase = verificarBaseConhecimento(textoBusca);
     if (resultadoBase.encontrou) {
         const icone = resultadoBase.classificacao === 'verdadeira' ? '✅' :
@@ -688,34 +703,22 @@ async function analisarNoticia() {
         const cor = resultadoBase.classificacao === 'verdadeira' ? '#166534' :
                     resultadoBase.classificacao === 'fake' ? '#991b1b' : '#a16207';
 
-        exibirResultado(icone, titulo, cor, textoExibicao, resultadoBase.explicacao, resultadoBase.score, resultadoBase.classificacao);
+        exibirResultado(icone, titulo, cor, texto, resultadoBase.explicacao, resultadoBase.score, resultadoBase.classificacao);
         sistema.analisadas++;
         sistema.ultimaAnalise = Date.now();
         if (resultadoBase.classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
         else if (resultadoBase.classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
         else { sistema.suspeitas++; sistema.pontos += 5; }
-        adicionarAoHistorico(textoExibicao, resultadoBase.classificacao, resultadoBase.explicacao, resultadoBase.score);
+        adicionarAoHistorico(texto, resultadoBase.classificacao, resultadoBase.explicacao, resultadoBase.score);
         atualizarDashboard();
         salvarDados();
-        if (DOM.textoNoticia) DOM.textoNoticia.value = '';
+        DOM.textoNoticia.value = '';
         return;
     }
 
-    // ---- PASSO 2: TENTAR API DO GOOGLE (se a base não encontrou) ----
-    // A API está desativada temporariamente
-    // exibirResultado('⏳', 'Pesquisando...', '#2563eb', textoExibicao, 'Buscando em fontes confiáveis...', 0, 'suspeita');
-    const scoreLocal = calcularScoreLocal(textoBusca);
-    /*
-    const resultadoAPI = await verificarComGoogleFactCheck(textoBusca);
-
-    if (resultadoAPI && resultadoAPI.encontrou) {
-        // ... todo o bloco da API (comentado)
-    }
-    */
-
-    // ---- PASSO 4: FALLBACK LOCAL (usando textoBusca) ----
-    console.log('⚠️ API não retornou. Usando fallback local.');
-    analisarLocalComScore(textoBusca, scoreLocal);
+    // ---- PASSO 3: FALLBACK LOCAL (se tudo falhar) ----
+    const scoreLocal = calcularScoreLocal(texto);
+    analisarLocalComScore(texto, scoreLocal);
 }
 
 // =================================================================
@@ -764,10 +767,9 @@ function responderMissao(resposta) {
 // 15. ROBÓTICA (CONEXÃO REAL ATIVADA)
 // =================================================================
 
-// ---- CONTROLE ----
-const USAR_DISPOSITIVOS_REAIS = true; // ← JÁ ESTÁ TRUE PARA O DIA DA APRESENTAÇÃO
+const USAR_DISPOSITIVOS_REAIS = true;
 
-// ---- MAKEY MAKEY (sempre funciona, é USB) ----
+// ---- MAKEY MAKEY ----
 document.addEventListener('keydown', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     const tecla = e.key.toLowerCase();
@@ -785,14 +787,10 @@ document.addEventListener('keydown', function(e) {
     else if (tecla === 'n') novaMissao();
 });
 
-// ================================================================
-// MICRO:BIT (real ou fallback simulação)
-// ================================================================
-
+// ---- MICRO:BIT ----
 let microConectado = false;
 let microbitDevice = null;
 
-// --- SIMULAÇÃO (fallback) ---
 function simularMicrobit(comando) {
     const mapa = { F: '🚨 FAKE', V: '✅ VERDADE', S: '⚠️ SUSPEITA' };
     if (DOM.comandoMicro) DOM.comandoMicro.textContent = 'Último comando: ' + (mapa[comando] || comando);
@@ -806,7 +804,6 @@ function simularPiscarLEDs(cor) {
     setTimeout(() => leds.forEach(l => l.className = 'led'), 1500);
 }
 
-// --- REAL (Web Bluetooth) ---
 async function conectarMicrobitReal() {
     try {
         if (typeof MicrobitConnection === 'undefined') {
@@ -861,12 +858,9 @@ async function piscarLEDsReal(cor) {
     }
 }
 
-// --- ESCOLHA (prioriza real, fallback simulação) ---
 const enviarParaMicrobit = USAR_DISPOSITIVOS_REAIS ? enviarParaMicrobitReal : simularMicrobit;
 const piscarLEDs = USAR_DISPOSITIVOS_REAIS ? piscarLEDsReal : simularPiscarLEDs;
 
-
-// --- EVENTOS DO BOTÃO ---
 if (DOM.conectarMicro) {
     DOM.conectarMicro.addEventListener('click', async function() {
         if (USAR_DISPOSITIVOS_REAIS) {
@@ -876,7 +870,6 @@ if (DOM.conectarMicro) {
                 await conectarMicrobitReal();
             }
         } else {
-            // Simulação
             microConectado = !microConectado;
             DOM.statusMicro.textContent = microConectado ? '🟢 Conectado (Simulação)' : '🔴 Desconectado (Simulação)';
             this.textContent = microConectado ? 'Desconectar (Simulação)' : 'Conectar (Simulação)';
@@ -893,15 +886,11 @@ if (DOM.btnTestarMicro) {
     });
 }
 
-// ================================================================
-// SPHERO (real ou fallback simulação)
-// ================================================================
-
+// ---- SPHERO ----
 let spheroConectado = false;
 let spheroDevice = null;
 let spheroX = 0, spheroY = 0;
 
-// --- SIMULAÇÃO (fallback) ---
 function simularMoverSphero(dir) {
     const passo = 25;
     if (dir === 'frente') spheroY -= passo;
@@ -919,7 +908,6 @@ function simularMudarCorSphero(cor) {
     setTimeout(() => { if (!spheroConectado) el.style.background = '#2563eb'; }, 2000);
 }
 
-// --- REAL (Web Bluetooth) ---
 async function conectarSpheroReal() {
     try {
         if (typeof spheron === 'undefined') {
@@ -979,11 +967,9 @@ function mudarCorSpheroReal(cor) {
     }
 }
 
-// --- ESCOLHA (prioriza real, fallback simulação) ---
 const moverSphero = USAR_DISPOSITIVOS_REAIS ? moverSpheroReal : simularMoverSphero;
 const mudarCorSphero = USAR_DISPOSITIVOS_REAIS ? mudarCorSpheroReal : simularMudarCorSphero;
 
-// --- EVENTOS DO BOTÃO ---
 if (DOM.conectarSphero) {
     DOM.conectarSphero.addEventListener('click', async function() {
         if (USAR_DISPOSITIVOS_REAIS) {
