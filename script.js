@@ -408,72 +408,95 @@ function verificarBaseConhecimento(texto) {
 
 async function analisarComIA(texto) {
     const GROQ_API_KEY = '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';
-    const modelo = 'groq/compound-mini'; // modelo fixo, sem loop
 
-    try {
-        exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, 'Processando...', 0, 'suspeita');
+    const modelosPreferidos = [
+    'qwen/qwen3.6-27b',
+    'openai/gpt-oss-20b',
+    'groq/compound-mini'
+];
 
-        const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer ' + GROQ_API_KEY,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: modelo,
-                messages: [
-                    {
-                        role: 'system',
-                        content: 'Classifique a notícia como verdadeira, fake ou suspeita. Responda apenas com JSON: {"classificacao":"verdadeira|fake|suspeita", "score":0-100, "explicacao":"texto curto em português"}'
-                    },
-                    { role: 'user', content: texto }
-                ],
-                temperature: 0,  // ❄️ zero = respostas consistentes
-                max_tokens: 200
-            })
-        });
+    for (const modelo of modelosPreferidos) {
+        try {
+            exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, `Usando ${modelo}...`, 0, 'suspeita');
 
-        const dados = await resposta.json();
+            const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + GROQ_API_KEY,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: modelo,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'Classifique a notícia como verdadeira, fake ou suspeita. Responda apenas com JSON: {"classificacao":"verdadeira|fake|suspeita", "score":0-100, "explicacao":"texto curto em português"}'
+                        },
+                        { role: 'user', content: texto }
+                    ],
+                    temperature: 0.2,
+                    max_tokens: 200
+                })
+            });
 
-        if (!resposta.ok) {
-            console.warn('⚠️ Groq falhou:', dados);
-            return { encontrou: false };
-        }
+            const dados = await resposta.json();
+            if (!resposta.ok) {
+                console.warn(`⚠️ ${modelo} falhou:`, dados.error?.message);
+                continue;
+            }
 
-        const conteudo = dados.choices?.[0]?.message?.content || '';
-        const match = conteudo.match(/\{[\s\S]*\}/);
-
-        if (match) {
-            try {
-                const json = JSON.parse(match[0]);
-                let score = json.score;
+            const conteudo = dados.choices?.[0]?.message?.content || '';
+            const jsonRegex = /\{\s*"classificacao"\s*:\s*"(verdadeira|fake|suspeita)"\s*,\s*"score"\s*:\s*(\d+(?:\.\d+)?)\s*,\s*"explicacao"\s*:\s*"([\s\S]*?)"\s*\}/i;
+            const match = conteudo.match(jsonRegex);
+            if (match) {
+                let score = parseFloat(match[2]);
                 if (score > 0 && score <= 1) score = Math.round(score * 100);
                 else score = Math.round(score);
                 return {
                     encontrou: true,
-                    classificacao: json.classificacao || 'suspeita',
-                    explicacao: json.explicacao || 'Análise concluída.',
-                    score: score || 70
+                    classificacao: match[1],
+                    explicacao: match[3] || 'Análise concluída.',
+                    score: score
                 };
-            } catch (e) {
-                console.warn('⚠️ JSON inválido, caindo no fallback local.');
-                return { encontrou: false };
             }
+            console.warn(`⚠️ JSON não extraído do modelo ${modelo}, tentando próximo...`);
+        } catch (erro) {
+            console.warn(`⚠️ Erro no ${modelo}:`, erro.message);
+            continue;
         }
-
-        const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
-            (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
-        return {
-            encontrou: true,
-            classificacao,
-            explicacao: conteudo.substring(0, 300) || 'Análise concluída.',
-            score: 70
-        };
-
-    } catch (erro) {
-        console.warn('⚠️ Erro IA:', erro.message);
-        return { encontrou: false };
     }
+
+    // Se falhar, tenta Google Fact Check
+    try {
+        exibirResultado('🧠', 'Consultando Google Fact Check...', '#2563eb', texto, 'Verificando base...', 0, 'suspeita');
+        const url = `https://factchecktools.googleapis.com/v1alpha1/claims:search?query=${encodeURIComponent(texto)}&key=${CONFIG.API_KEY}`;
+        const respostaGoogle = await fetch(url);
+        const dadosGoogle = await respostaGoogle.json();
+
+        if (respostaGoogle.ok && dadosGoogle.claims && dadosGoogle.claims.length > 0) {
+            const claim = dadosGoogle.claims[0];
+            const review = claim.claimReview?.[0];
+            const rating = review?.textualRating || '';
+            const publisher = review?.publisher?.name || 'Agência de fact-checking';
+
+            let classificacao = 'suspeita';
+            let score = 70;
+            if (/false|falso|mentira|fake|enganoso|incorreto|impreciso/i.test(rating)) {
+                classificacao = 'fake';
+                score = 90;
+            } else if (/true|verdade|correto|verdadeiro|real|preciso/i.test(rating)) {
+                classificacao = 'verdadeira';
+                score = 95;
+            }
+
+            const explicacao = `🔍 ${claim.text || 'Alegação verificada'} — ${rating} (${publisher})`;
+            return { encontrou: true, classificacao, explicacao, score };
+        }
+    } catch (e) {
+        console.warn('⚠️ Google Fact Check falhou:', e.message);
+    }
+
+    return { encontrou: false };
 }
 
 function analisarLocalComScore(texto, score) {
@@ -517,6 +540,10 @@ async function analisarNoticia() {
     { chave: 'espanha venceu a copa de 2026', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026.' },
     { chave: 'espanha ganhou a copa de 2026', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026.' },
     { chave: 'espanha é campeã do mundo', resp: 'verdadeira', expl: '✅ A Espanha é a atual campeã mundial (2026).' },
+    { chave: 'enchentes do rio grande do sul', resp: 'verdadeira', expl: '✅ As enchentes no Rio Grande do Sul são eventos reais, confirmados por autoridades e mídia.' },
+    { chave: 'enchente no rio grande do sul', resp: 'verdadeira', expl: '✅ As enchentes no Rio Grande do Sul foram reais e amplamente documentadas.' },
+    { chave: 'rio grande do sul tem enchente', resp: 'verdadeira', expl: '✅ Sim, o Rio Grande do Sul sofreu graves enchentes, confirmadas por fontes oficiais.' },
+    { chave: 'enchentes no rio grande do sul sao reais', resp: 'verdadeira', expl: '✅ Sim, as enchentes no Rio Grande do Sul foram reais e causaram grandes danos.' }
     { chave: 'espanha é campea do mundo', resp: 'verdadeira', expl: '✅ A Espanha é a atual campeã mundial (2026).' },
     { chave: 'tem uranio nas vacinas', resp: 'fake', expl: '❌ Falso! Não há evidências científicas de urânio em vacinas.' },
     { chave: 'vacinas tem uranio', resp: 'fake', expl: '❌ Falso! Não há evidências científicas de urânio em vacinas.' },
