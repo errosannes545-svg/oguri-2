@@ -633,92 +633,75 @@ function analisarLocalComScore(texto, scoreFinal) {
     if (DOM.textoNoticia) DOM.textoNoticia.value = '';
 }
 
-// =================================================================
-// 13. FUNÇÃO PRINCIPAL DE ANÁLISE (IA + FALLBACK COMPLETO)
-// =================================================================
+// ================================================================
+// DEEPSEEK V4 FLASH — VIA HUGGING FACE (FUNCIONA NO NAVEGADOR)
+// ================================================================
 
-async function analisarNoticia() {
-    if (!DOM.textoNoticia) return;
-    let texto = DOM.textoNoticia.value.trim();
-    if (!texto) {
-        exibirResultadoErro('⚠️ Digite uma informação para verificar.');
-        return;
-    }
+async function analisarComDeepSeek(texto) {
+    try {
+        exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, 'Processando...', 0, 'suspeita');
 
-    // ---- PASSO 1: TENTAR IA DA DEEPSEEK ----
-    const resultadoIA = await analisarComDeepSeek(texto);
-    if (resultadoIA && resultadoIA.encontrou) {
-        const icone = resultadoIA.classificacao === 'verdadeira' ? '✅' :
-                      resultadoIA.classificacao === 'fake' ? '❌' : '⚠️';
-        const titulo = resultadoIA.classificacao === 'verdadeira' ? 'Verdadeira' :
-                       resultadoIA.classificacao === 'fake' ? 'Falsa' : 'Suspeita';
-        const cor = resultadoIA.classificacao === 'verdadeira' ? '#166534' :
-                    resultadoIA.classificacao === 'fake' ? '#991b1b' : '#a16207';
+        const resposta = await fetch('https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'deepseek-v4-flash',
+                messages: [
+                    {
+                        role: 'system',
+                        content: `Você é um verificador de fatos. Analise a notícia e responda APENAS com JSON: {"classificacao": "verdadeira/fake/suspeita", "score": 0-100, "explicacao": "texto em português"}`
+                    },
+                    {
+                        role: 'user',
+                        content: texto
+                    }
+                ],
+                temperature: 0.3,
+                max_tokens: 300
+            })
+        });
 
-        exibirResultado(icone, titulo, cor, texto, resultadoIA.explicacao, resultadoIA.score, resultadoIA.classificacao);
-        sistema.analisadas++;
-        sistema.ultimaAnalise = Date.now();
-        if (resultadoIA.classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
-        else if (resultadoIA.classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
-        else { sistema.suspeitas++; sistema.pontos += 5; }
-        adicionarAoHistorico(texto, resultadoIA.classificacao, resultadoIA.explicacao, resultadoIA.score);
-        atualizarDashboard();
-        salvarDados();
-        DOM.textoNoticia.value = '';
-        return;
-    }
-
-    // ---- FATOS DE EMERGÊNCIA (RESPOSTA DIRETA) ----
-    const fatosEmergencia = [
-        { pergunta: 'vacinas causam autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento e retratado. Fonte: OMS, CDC.' },
-        { pergunta: 'vacina causa autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento. Fonte: OMS.' },
-    ];
-
-    const textoLower = texto.toLowerCase();
-    for (const fato of fatosEmergencia) {
-        if (textoLower.includes(fato.pergunta)) {
-            exibirResultado('❌', 'Falsa', '#991b1b', texto, fato.explicacao, 95, 'fake');
-            sistema.analisadas++;
-            sistema.ultimaAnalise = Date.now();
-            sistema.fake++;
-            sistema.pontos += 15;
-            adicionarAoHistorico(texto, 'fake', fato.explicacao, 95);
-            atualizarDashboard();
-            salvarDados();
-            DOM.textoNoticia.value = '';
-            return;
+        if (!resposta.ok) {
+            console.warn('⚠️ Erro na API:', resposta.status);
+            return { encontrou: false };
         }
+
+        const dados = await resposta.json();
+        const conteudo = dados.choices[0].message.content;
+        console.log('🧠 DeepSeek respondeu:', conteudo);
+
+        let json;
+        try {
+            const match = conteudo.match(/\{[\s\S]*\}/);
+            if (match) {
+                json = JSON.parse(match[0]);
+            } else {
+                json = JSON.parse(conteudo);
+            }
+        } catch (e) {
+            const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
+                                 conteudo.includes('fake') || conteudo.includes('falso') ? 'fake' : 'suspeita';
+            return {
+                encontrou: true,
+                classificacao: classificacao,
+                explicacao: conteudo.substring(0, 300),
+                score: 70
+            };
+        }
+
+        return {
+            encontrou: true,
+            classificacao: json.classificacao || 'suspeita',
+            explicacao: json.explicacao || 'Análise concluída.',
+            score: json.score || 70
+        };
+
+    } catch (erro) {
+        console.error('❌ Erro na DeepSeek:', erro.message);
+        return { encontrou: false };
     }
-
-    // ---- PASSO 2: FALLBACK PARA A BASE DE CONHECIMENTO LOCAL ----
-    const temPortugues = /[áàâãéèêíïóôõúç]/i.test(texto);
-    let textoBusca = temPortugues ? await traduzirParaIngles(texto) : texto;
-
-    const resultadoBase = verificarBaseConhecimento(textoBusca);
-    if (resultadoBase.encontrou) {
-        const icone = resultadoBase.classificacao === 'verdadeira' ? '✅' :
-                      resultadoBase.classificacao === 'fake' ? '❌' : '⚠️';
-        const titulo = resultadoBase.classificacao === 'verdadeira' ? 'Verdadeira' :
-                       resultadoBase.classificacao === 'fake' ? 'Falsa' : 'Suspeita';
-        const cor = resultadoBase.classificacao === 'verdadeira' ? '#166534' :
-                    resultadoBase.classificacao === 'fake' ? '#991b1b' : '#a16207';
-
-        exibirResultado(icone, titulo, cor, texto, resultadoBase.explicacao, resultadoBase.score, resultadoBase.classificacao);
-        sistema.analisadas++;
-        sistema.ultimaAnalise = Date.now();
-        if (resultadoBase.classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
-        else if (resultadoBase.classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
-        else { sistema.suspeitas++; sistema.pontos += 5; }
-        adicionarAoHistorico(texto, resultadoBase.classificacao, resultadoBase.explicacao, resultadoBase.score);
-        atualizarDashboard();
-        salvarDados();
-        DOM.textoNoticia.value = '';
-        return;
-    }
-
-    // ---- PASSO 3: FALLBACK LOCAL (se tudo falhar) ----
-    const scoreLocal = calcularScoreLocal(texto);
-    analisarLocalComScore(texto, scoreLocal);
 }
 
 // =================================================================
