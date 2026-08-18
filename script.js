@@ -406,29 +406,20 @@ function verificarBaseConhecimento(texto) {
     return { encontrou: false };
 }
 
-// ================================================================
-// ANÁLISE COM IA GROQ
-// ================================================================
-
-const GROQ_API_KEY = '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';
-
 async function analisarComIA(texto) {
     try {
-        // 1. Busca dinamicamente os modelos disponíveis na Groq
+        // Busca dinamicamente os modelos disponíveis
         const respostaModelos = await fetch('https://api.groq.com/openai/v1/models', {
             headers: { 'Authorization': 'Bearer ' + GROQ_API_KEY }
         });
         const dadosModelos = await respostaModelos.json();
         const modelos = dadosModelos.data ? dadosModelos.data.map(m => m.id) : [];
-        console.log('📋 Modelos disponíveis:', modelos);
 
-        // Filtra modelos de chat (ignora áudio/tts)
+        // Filtra apenas modelos de chat (exclui áudio, tts e guard)
         const modelosChat = modelos.filter(id => 
-            /llama|gemma|mixtral|qwen|deepseek|chat/i.test(id) &&
-            !/tts|whisper|audio/i.test(id)
+            !/tts|whisper|audio|prompt-guard|safeguard/i.test(id)
         );
 
-        // Testa cada modelo até um funcionar
         for (const modelo of modelosChat) {
             try {
                 exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, `Usando ${modelo}...`, 0, 'suspeita');
@@ -484,7 +475,7 @@ async function analisarComIA(texto) {
         console.warn('⚠️ Falha ao obter modelos Groq:', e.message);
     }
 
-    // 2. Google Fact Check Tools (API real)
+    // Google Fact Check Tools (API real)
     try {
         exibirResultado('🧠', 'Consultando Google Fact Check...', '#2563eb', texto, 'Verificando base...', 0, 'suspeita');
         const url = `https://factchecktools.googleapis.com/v1alpha1/claims:search?query=${encodeURIComponent(texto)}&key=${CONFIG.API_KEY}`;
@@ -514,8 +505,116 @@ async function analisarComIA(texto) {
         console.warn('⚠️ Google Fact Check falhou:', e.message);
     }
 
-    // 3. Fallback local
     return { encontrou: false };
+}
+
+function analisarLocalComScore(texto, score) {
+    let classificacao = 'suspeita';
+    if (score < 40) classificacao = 'fake';
+    else if (score >= 70) classificacao = 'verdadeira';
+
+    const cor = classificacao === 'verdadeira' ? '#166534' : classificacao === 'fake' ? '#991b1b' : '#a16207';
+    const icone = classificacao === 'verdadeira' ? '✅' : classificacao === 'fake' ? '❌' : '⚠️';
+    const titulo = classificacao === 'verdadeira' ? 'Verdadeira' : classificacao === 'fake' ? 'Falsa' : 'Suspeita';
+    const explicacao = `Análise local: ${score}% de confiança. ` +
+        (classificacao === 'fake' ? 'Palavras suspeitas encontradas.' :
+         classificacao === 'verdadeira' ? 'Fontes confiáveis detectadas.' :
+         'Sem fontes claras.');
+
+    exibirResultado(icone, titulo, cor, texto, explicacao, score, classificacao);
+    sistema.analisadas++;
+    sistema.ultimaAnalise = Date.now();
+    if (classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
+    else if (classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
+    else { sistema.suspeitas++; sistema.pontos += 5; }
+    adicionarAoHistorico(texto, classificacao, explicacao, score);
+    atualizarDashboard();
+    salvarDados();
+    DOM.textoNoticia.value = '';
+    enviarParaMicrobit(classificacao === 'fake' ? 'F' : classificacao === 'verdadeira' ? 'V' : 'S');
+}
+
+async function analisarNoticia() {
+    if (!DOM.textoNoticia) return;
+    const texto = DOM.textoNoticia.value.trim();
+    if (!texto) {
+        exibirResultadoErro('⚠️ Digite uma informação para verificar.');
+        return;
+    }
+
+    // 1. Tentar IA
+    const resultadoIA = await analisarComIA(texto);
+    if (resultadoIA.encontrou) {
+        const icone = resultadoIA.classificacao === 'verdadeira' ? '✅' : resultadoIA.classificacao === 'fake' ? '❌' : '⚠️';
+        const titulo = resultadoIA.classificacao === 'verdadeira' ? 'Verdadeira' : resultadoIA.classificacao === 'fake' ? 'Falsa' : 'Suspeita';
+        const cor = resultadoIA.classificacao === 'verdadeira' ? '#166534' : resultadoIA.classificacao === 'fake' ? '#991b1b' : '#a16207';
+        exibirResultado(icone, titulo, cor, texto, resultadoIA.explicacao, resultadoIA.score, resultadoIA.classificacao);
+        sistema.analisadas++;
+        sistema.ultimaAnalise = Date.now();
+        if (resultadoIA.classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
+        else if (resultadoIA.classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
+        else { sistema.suspeitas++; sistema.pontos += 5; }
+        adicionarAoHistorico(texto, resultadoIA.classificacao, resultadoIA.explicacao, resultadoIA.score);
+        atualizarDashboard();
+        salvarDados();
+        DOM.textoNoticia.value = '';
+        enviarParaMicrobit(resultadoIA.classificacao === 'fake' ? 'F' : resultadoIA.classificacao === 'verdadeira' ? 'V' : 'S');
+        return;
+    }
+
+    // 2. Fatos de emergência
+    const fatosEmergencia = [
+        { pergunta: 'vacinas causam autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento. Fonte: OMS.' },
+        { pergunta: 'vacina causa autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento. Fonte: OMS.' },
+        { pergunta: 'a terra é plana', resposta: 'fake', explicacao: '❌ Falso! Terra é esferoide.' },
+        { pergunta: 'cloroquina cura covid', resposta: 'fake', explicacao: '❌ Falso! Estudos mostraram ineficácia.' },
+        { pergunta: 'o sol é uma estrela', resposta: 'verdadeira', explicacao: '✅ Verdadeiro! Sol é uma estrela.' },
+        { pergunta: 'a lua tem luz própria', resposta: 'fake', explicacao: '❌ Falso! Lua reflete luz do Sol.' }
+    ];
+    const textoLower = texto.toLowerCase();
+    for (const fato of fatosEmergencia) {
+        if (textoLower.includes(fato.pergunta)) {
+            exibirResultado('✅', fato.resposta === 'verdadeira' ? 'Verdadeira' : 'Falsa', fato.resposta === 'verdadeira' ? '#166534' : '#991b1b', texto, fato.explicacao, 95, fato.resposta);
+            sistema.analisadas++;
+            sistema.ultimaAnalise = Date.now();
+            if (fato.resposta === 'fake') { sistema.fake++; sistema.pontos += 15; }
+            else { sistema.verdadeiras++; sistema.pontos += 10; }
+            adicionarAoHistorico(texto, fato.resposta, fato.explicacao, 95);
+            atualizarDashboard();
+            salvarDados();
+            DOM.textoNoticia.value = '';
+            enviarParaMicrobit(fato.resposta === 'fake' ? 'F' : 'V');
+            return;
+        }
+    }
+
+    // 3. Base local
+    const temPortugues = /[áàâãéèêíïóôõúç]/i.test(texto);
+    const textoBusca = temPortugues ? await traduzirParaIngles(texto) : texto;
+    const resultadoBase = verificarBaseConhecimento(textoBusca);
+    if (resultadoBase.encontrou) {
+        exibirResultado(
+            resultadoBase.classificacao === 'verdadeira' ? '✅' : resultadoBase.classificacao === 'fake' ? '❌' : '⚠️',
+            resultadoBase.classificacao === 'verdadeira' ? 'Verdadeira' : resultadoBase.classificacao === 'fake' ? 'Falsa' : 'Suspeita',
+            resultadoBase.classificacao === 'verdadeira' ? '#166534' : resultadoBase.classificacao === 'fake' ? '#991b1b' : '#a16207',
+            texto, resultadoBase.explicacao, resultadoBase.score, resultadoBase.classificacao
+        );
+        sistema.analisadas++;
+        sistema.ultimaAnalise = Date.now();
+        if (resultadoBase.classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
+        else if (resultadoBase.classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
+        else { sistema.suspeitas++; sistema.pontos += 5; }
+        adicionarAoHistorico(texto, resultadoBase.classificacao, resultadoBase.explicacao, resultadoBase.score);
+        atualizarDashboard();
+        salvarDados();
+        DOM.textoNoticia.value = '';
+        enviarParaMicrobit(resultadoBase.classificacao === 'fake' ? 'F' : resultadoBase.classificacao === 'verdadeira' ? 'V' : 'S');
+        return;
+    }
+
+    // 4. Fallback local
+    const scoreLocal = calcularScoreLocal(texto);
+    analisarLocalComScore(texto, scoreLocal);
 }
 
 // ================================================================
