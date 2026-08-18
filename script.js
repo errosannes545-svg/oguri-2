@@ -429,7 +429,7 @@ async function analisarComIA(texto) {
                     messages: [
                         {
                             role: 'system',
-                            content: `Hoje é ${new Date().toLocaleDateString('pt-BR')}. Você é um verificador de fatos. Analise a afirmação do usuário e classifique como "verdadeira", "fake" ou "suspeita". Responda APENAS com um JSON válido, sem texto antes ou depois, no formato: {"classificacao":"verdadeira|fake|suspeita", "score":0-100, "explicacao":"texto curto em português"}`
+                            content: 'Classifique a notícia como verdadeira, fake ou suspeita. Responda apenas com JSON: {"classificacao":"verdadeira|fake|suspeita", "score":0-100, "explicacao":"texto curto em português"}'
                         },
                         { role: 'user', content: texto }
                     ],
