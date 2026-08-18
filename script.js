@@ -525,6 +525,27 @@ async function analisarNoticia() {
         exibirResultadoErro('⚠️ Digite uma informação para verificar.');
         return;
     }
+   
+    // Fatos atuais (pós-treino dos modelos)
+    const fatosAtuais = [
+        { chave: 'espanha é bicampeã', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026, tornando-se bicampeã mundial.' },
+        { chave: 'espanha venceu a copa de 2026', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026.' },
+        { chave: 'espanha ganhou a copa de 2026', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026.' },
+        { chave: 'espanha é campeã do mundo', resp: 'verdadeira', expl: '✅ A Espanha é a atual campeã mundial (2026), após vencer a Copa de 2026.' }
+    ];
+    for (const fato of fatosAtuais) {
+        if (texto.toLowerCase().includes(fato.chave)) {
+            exibirResultado('✅', 'Verdadeira', '#166534', texto, fato.expl, 98, 'verdadeira');
+            sistema.analisadas++;
+            sistema.verdadeiras++;
+            sistema.pontos += 10;
+            adicionarAoHistorico(texto, 'verdadeira', fato.expl, 98);
+            atualizarDashboard();
+            salvarDados();
+            DOM.textoNoticia.value = '';
+            return;
+        }
+    }
 
     // 1. Tentar IA
     const resultadoIA = await analisarComIA(texto);
