@@ -534,7 +534,7 @@ async function analisarNoticia() {
     }
    
     // Fatos atuais (pós-treino dos modelos)
-    cconst fatosAtuais = [
+    const fatosAtuais = [
     { chave: 'espanha é bicampeã', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026, tornando-se bicampeã mundial.' },
     { chave: 'espanha é bicampea', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026, tornando-se bicampeã mundial.' },
     { chave: 'espanha venceu a copa de 2026', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026.' },
