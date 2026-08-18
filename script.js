@@ -426,34 +426,33 @@ function verificarBaseConhecimento(texto) {
 }
 
 // ================================================================
-// ANÁLISE COM IA DEEPSEEK (VIA CORS PROXY)
+// ANÁLISE COM IA GROQ (GRÁTIS, SEM CORS)
 // ================================================================
 
-const DEEPSEEK_API_KEY = 'sk-0c9bf1c239e54b52b2f4a95b65cb9cb2';
+const GROQ_API_KEY = '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';
 
-async function analisarComDeepSeek(texto) {
+async function analisarComIA(texto) {
     try {
-        exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, 'Processando...', 0, 'suspeita');
+        exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, 'Processando com Groq...', 0, 'suspeita');
 
-        // CORS proxy gratuito
-        const proxyUrl = 'https://corsproxy.io/?';
-        const apiUrl = 'https://api.deepseek.com/v1/chat/completions';
-
-        const resposta = await fetch(proxyUrl + encodeURIComponent(apiUrl), {
+        const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': 'Bearer ' + DEEPSEEK_API_KEY,
+                'Authorization': `Bearer ${GROQ_API_KEY}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'deepseek-chat',
-                messages: [{
-                    role: 'system',
-                    content: 'Você é um verificador de fatos. Analise a notícia e responda APENAS com JSON: {"classificacao": "verdadeira/fake/suspeita", "score": 0-100, "explicacao": "texto em português"}'
-                }, {
-                    role: 'user',
-                    content: texto
-                }],
+                model: 'mixtral-8x7b-32768', // ou 'llama3-70b-8192'
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'Você é um verificador de fatos. Analise a notícia e responda APENAS com JSON: {"classificacao": "verdadeira/fake/suspeita", "score": 0-100, "explicacao": "texto em português"}'
+                    },
+                    {
+                        role: 'user',
+                        content: texto
+                    }
+                ],
                 temperature: 0.3,
                 max_tokens: 300
             })
@@ -464,17 +463,17 @@ async function analisarComDeepSeek(texto) {
             return { encontrou: false };
         }
 
-        var dados = await resposta.json();
-        var conteudo = dados.choices[0].message.content;
-        console.log('🧠 DeepSeek respondeu:', conteudo);
+        const dados = await resposta.json();
+        const conteudo = dados.choices[0].message.content;
+        console.log('🧠 IA respondeu:', conteudo);
 
-        var json;
+        let json;
         try {
-            var match = conteudo.match(/\{[\s\S]*\}/);
+            const match = conteudo.match(/\{[\s\S]*\}/);
             json = JSON.parse(match ? match[0] : conteudo);
         } catch (e) {
-            var classificacao = conteudo.indexOf('verdade') !== -1 ? 'verdadeira' :
-                (conteudo.indexOf('fake') !== -1 || conteudo.indexOf('falso') !== -1) ? 'fake' : 'suspeita';
+            const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
+                (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
             return {
                 encontrou: true,
                 classificacao: classificacao,
@@ -491,7 +490,7 @@ async function analisarComDeepSeek(texto) {
         };
 
     } catch (erro) {
-        console.error('❌ Erro na DeepSeek:', erro.message);
+        console.error('❌ Erro na IA:', erro.message);
         return { encontrou: false };
     }
 }
