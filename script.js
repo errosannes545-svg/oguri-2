@@ -566,7 +566,7 @@ async function analisarNoticia() {
     }
 
     // ---- TENTAR IA DEEPSEEK ----
-    var resultadoIA = await analisarComDeepSeek(texto);
+    var resultadoIA = await analisarComIA(texto);
     if (resultadoIA && resultadoIA.encontrou) {
         var icone = resultadoIA.classificacao === 'verdadeira' ? '✅' :
             resultadoIA.classificacao === 'fake' ? '❌' : '⚠️';
