@@ -634,20 +634,27 @@ function analisarLocalComScore(texto, scoreFinal) {
 }
 
 // ================================================================
-// DEEPSEEK V4 FLASH — VIA HUGGING FACE (FUNCIONA NO NAVEGADOR)
+// DEEPSEEK V4 FLASH — VIA API DIRETA COM CORS PROXY
 // ================================================================
+
+const DEEPSEEK_API_KEY = 'sk-0c9bf1c239e54b52b2f4a95b65cb9cb2';
 
 async function analisarComDeepSeek(texto) {
     try {
         exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, 'Processando...', 0, 'suspeita');
 
-        const resposta = await fetch('https://q5dh1rfszfym23hj.us-east-2.aws.endpoints.huggingface.cloud/v1/chat/completions', {
+        // Usa um CORS proxy gratuito (não precisa de cadastro)
+        const proxyUrl = 'https://corsproxy.io/?';
+        const apiUrl = 'https://api.deepseek.com/v1/chat/completions';
+
+        const resposta = await fetch(proxyUrl + encodeURIComponent(apiUrl), {
             method: 'POST',
             headers: {
+                'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'deepseek-v4-flash',
+                model: 'deepseek-chat',
                 messages: [
                     {
                         role: 'system',
