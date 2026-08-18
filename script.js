@@ -410,9 +410,10 @@ async function analisarComIA(texto) {
     const GROQ_API_KEY = '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';
 
     const modelosPreferidos = [
-        'qwen/qwen3.6-27b',
-        'openai/gpt-oss-20b'
-    ];
+    'qwen/qwen3.6-27b',
+    'openai/gpt-oss-20b',
+    'groq/compound-mini'
+];
 
     for (const modelo of modelosPreferidos) {
         try {
