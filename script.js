@@ -534,35 +534,47 @@ async function analisarNoticia() {
     }
    
     // Fatos atuais (pós-treino dos modelos)
-    const fatosAtuais = [
+    
+const fatosAtuais = [
     { chave: 'espanha é bicampeã', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026, tornando-se bicampeã mundial.' },
     { chave: 'espanha é bicampea', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026, tornando-se bicampeã mundial.' },
     { chave: 'espanha venceu a copa de 2026', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026.' },
     { chave: 'espanha ganhou a copa de 2026', resp: 'verdadeira', expl: '✅ A Espanha venceu a Copa do Mundo de 2026.' },
     { chave: 'espanha é campeã do mundo', resp: 'verdadeira', expl: '✅ A Espanha é a atual campeã mundial (2026).' },
+    { chave: 'espanha é campea do mundo', resp: 'verdadeira', expl: '✅ A Espanha é a atual campeã mundial (2026).' },
     { chave: 'enchentes do rio grande do sul', resp: 'verdadeira', expl: '✅ As enchentes no Rio Grande do Sul são eventos reais, confirmados por autoridades e mídia.' },
     { chave: 'enchente no rio grande do sul', resp: 'verdadeira', expl: '✅ As enchentes no Rio Grande do Sul foram reais e amplamente documentadas.' },
     { chave: 'rio grande do sul tem enchente', resp: 'verdadeira', expl: '✅ Sim, o Rio Grande do Sul sofreu graves enchentes, confirmadas por fontes oficiais.' },
-    { chave: 'enchentes no rio grande do sul sao reais', resp: 'verdadeira', expl: '✅ Sim, as enchentes no Rio Grande do Sul foram reais e causaram grandes danos.' }
-    { chave: 'espanha é campea do mundo', resp: 'verdadeira', expl: '✅ A Espanha é a atual campeã mundial (2026).' },
+    { chave: 'enchentes no rio grande do sul sao reais', resp: 'verdadeira', expl: '✅ Sim, as enchentes no Rio Grande do Sul foram reais e causaram grandes danos.' },
     { chave: 'tem uranio nas vacinas', resp: 'fake', expl: '❌ Falso! Não há evidências científicas de urânio em vacinas.' },
     { chave: 'vacinas tem uranio', resp: 'fake', expl: '❌ Falso! Não há evidências científicas de urânio em vacinas.' },
     { chave: 'vacina tem uranio', resp: 'fake', expl: '❌ Falso! Não há evidências científicas de urânio em vacinas.' },
     { chave: 'uranio nas vacinas', resp: 'fake', expl: '❌ Falso! Não há evidências científicas de urânio em vacinas.' }
 ];
-    for (const fato of fatosAtuais) {
-        if (texto.toLowerCase().includes(fato.chave)) {
-            exibirResultado('✅', 'Verdadeira', '#166534', texto, fato.expl, 98, 'verdadeira');
-            sistema.analisadas++;
+
+for (const fato of fatosAtuais) {
+    if (texto.toLowerCase().includes(fato.chave)) {
+        const iconeFato = fato.resp === 'verdadeira' ? '✅' : '❌';
+        const tituloFato = fato.resp === 'verdadeira' ? 'Verdadeira' : 'Falsa';
+        const corFato = fato.resp === 'verdadeira' ? '#166534' : '#991b1b';
+        exibirResultado(iconeFato, tituloFato, corFato, texto, fato.expl, 98, fato.resp);
+        sistema.analisadas++;
+        sistema.ultimaAnalise = Date.now();
+        if (fato.resp === 'fake') {
+            sistema.fake++;
+            sistema.pontos += 15;
+        } else {
             sistema.verdadeiras++;
             sistema.pontos += 10;
-            adicionarAoHistorico(texto, 'verdadeira', fato.expl, 98);
-            atualizarDashboard();
-            salvarDados();
-            DOM.textoNoticia.value = '';
-            return;
         }
+        adicionarAoHistorico(texto, fato.resp, fato.expl, 98);
+        atualizarDashboard();
+        salvarDados();
+        DOM.textoNoticia.value = '';
+        enviarParaMicrobit(fato.resp === 'fake' ? 'F' : 'V');
+        return;
     }
+}
 
     // 1. Tentar IA
     const resultadoIA = await analisarComIA(texto);
