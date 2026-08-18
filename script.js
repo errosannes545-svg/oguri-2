@@ -412,27 +412,24 @@ function verificarBaseConhecimento(texto) {
 
 const GROQ_API_KEY = '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';
 
-async function obterModelosGroq() {
-    const resposta = await fetch('https://api.groq.com/openai/v1/models', {
-        headers: { 'Authorization': 'Bearer ' + GROQ_API_KEY }
-    });
-    const dados = await resposta.json();
-    return dados.data ? dados.data.map(m => m.id) : [];
-}
-
 async function analisarComIA(texto) {
     try {
-        const todosModelos = await obterModelosGroq();
-        console.log('📋 Modelos Groq disponíveis:', todosModelos);
+        // 1. Busca dinamicamente os modelos disponíveis na Groq
+        const respostaModelos = await fetch('https://api.groq.com/openai/v1/models', {
+            headers: { 'Authorization': 'Bearer ' + GROQ_API_KEY }
+        });
+        const dadosModelos = await respostaModelos.json();
+        const modelos = dadosModelos.data ? dadosModelos.data.map(m => m.id) : [];
+        console.log('📋 Modelos disponíveis:', modelos);
 
-        // Filtra modelos de chat (ignora TTS, áudio, etc.)
-        const modelos = todosModelos.filter(id => 
-            /llama|gemma|mixtral|qwen|deepseek/i.test(id) && 
+        // Filtra modelos de chat (ignora áudio/tts)
+        const modelosChat = modelos.filter(id => 
+            /llama|gemma|mixtral|qwen|deepseek|chat/i.test(id) &&
             !/tts|whisper|audio/i.test(id)
         );
-        const listaModelos = modelos.length > 0 ? modelos : todosModelos;
 
-        for (const modelo of listaModelos) {
+        // Testa cada modelo até um funcionar
+        for (const modelo of modelosChat) {
             try {
                 exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, `Usando ${modelo}...`, 0, 'suspeita');
 
@@ -457,10 +454,9 @@ async function analisarComIA(texto) {
                 });
 
                 const dados = await resposta.json();
-
                 if (!resposta.ok) {
-                    console.warn(`⚠️ ${modelo} falhou:`, dados.error?.message || 'erro');
-                    continue; // tenta o próximo modelo
+                    console.warn(`⚠️ ${modelo} falhou:`, dados.error?.message);
+                    continue;
                 }
 
                 const conteudo = dados.choices?.[0]?.message?.content || '';
@@ -471,14 +467,8 @@ async function analisarComIA(texto) {
                 } catch (e) {
                     const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
                         (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
-                    return {
-                        encontrou: true,
-                        classificacao,
-                        explicacao: conteudo.substring(0, 300) || 'Análise concluída.',
-                        score: 70
-                    };
+                    return { encontrou: true, classificacao, explicacao: conteudo.substring(0, 300), score: 70 };
                 }
-
                 return {
                     encontrou: true,
                     classificacao: json.classificacao || 'suspeita',
@@ -491,10 +481,10 @@ async function analisarComIA(texto) {
             }
         }
     } catch (e) {
-        console.warn('⚠️ Não foi possível obter modelos Groq:', e.message);
+        console.warn('⚠️ Falha ao obter modelos Groq:', e.message);
     }
 
-    // Google Fact Check Tools (API real de fact-checking)
+    // 2. Google Fact Check Tools (API real)
     try {
         exibirResultado('🧠', 'Consultando Google Fact Check...', '#2563eb', texto, 'Verificando base...', 0, 'suspeita');
         const url = `https://factchecktools.googleapis.com/v1alpha1/claims:search?query=${encodeURIComponent(texto)}&key=${CONFIG.API_KEY}`;
@@ -524,6 +514,7 @@ async function analisarComIA(texto) {
         console.warn('⚠️ Google Fact Check falhou:', e.message);
     }
 
+    // 3. Fallback local
     return { encontrou: false };
 }
 
