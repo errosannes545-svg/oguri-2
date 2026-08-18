@@ -1,5 +1,5 @@
 // ================================================================
-// SENTINELA DA VERDADE — script.js (v10.0 - FUNCIONAL)
+// SENTINELA DA VERDADE — script.js (v11.0 - COM HARDWARE REAL)
 // ================================================================
 
 // =================================================================
@@ -18,8 +18,8 @@ const CONFIG = {
 // 1. PERSISTÊNCIA
 // =================================================================
 
-var memoriaFallback = {};
-var sistema = {
+let memoriaFallback = {};
+const sistema = {
     pontos: 0,
     medalha: 'Nenhuma',
     analisadas: 0,
@@ -45,9 +45,9 @@ function salvarDados() {
 
 function carregarDados() {
     try {
-        var raw = localStorage.getItem('sentinelaDados');
+        const raw = localStorage.getItem('sentinelaDados');
         if (raw) {
-            var dados = JSON.parse(raw);
+            const dados = JSON.parse(raw);
             Object.assign(sistema, dados);
             if (!sistema.historicoAnalises) sistema.historicoAnalises = [];
         }
@@ -63,8 +63,8 @@ function resetarDados() {
 }
 
 function exportarDados() {
-    var blob = new Blob([JSON.stringify(sistema, null, 2)], { type: 'application/json' });
-    var a = document.createElement('a');
+    const blob = new Blob([JSON.stringify(sistema, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'sentinela_' + new Date().toISOString().slice(0, 10) + '.json';
     a.click();
@@ -216,17 +216,17 @@ function atualizarDashboard() {
     if (DOM.erros) DOM.erros.textContent = sistema.erros;
     if (DOM.sequencia) DOM.sequencia.textContent = sistema.sequenciaAtual;
 
-    var total = sistema.acertos + sistema.erros;
-    var taxa = total > 0 ? Math.round((sistema.acertos / total) * 100) : 0;
+    const total = sistema.acertos + sistema.erros;
+    const taxa = total > 0 ? Math.round((sistema.acertos / total) * 100) : 0;
     if (DOM.taxaAcerto) DOM.taxaAcerto.textContent = taxa + '%';
     if (DOM.maiorSequencia) DOM.maiorSequencia.textContent = sistema.maiorSequencia;
 
     if (sistema.dataInicio && DOM.mediaDia) {
-        var dias = Math.max(1, Math.ceil((Date.now() - sistema.dataInicio) / (1000 * 60 * 60 * 24)));
+        const dias = Math.max(1, Math.ceil((Date.now() - sistema.dataInicio) / (1000 * 60 * 60 * 24)));
         DOM.mediaDia.textContent = Math.round(sistema.analisadas / dias);
     }
 
-    var totalGeral = sistema.fake + sistema.verdadeiras + sistema.suspeitas;
+    const totalGeral = sistema.fake + sistema.verdadeiras + sistema.suspeitas;
     if (totalGeral > 0) {
         if (DOM.barFake) DOM.barFake.style.width = ((sistema.fake / totalGeral) * 100) + '%';
         if (DOM.barVerdade) DOM.barVerdade.style.width = ((sistema.verdadeiras / totalGeral) * 100) + '%';
@@ -236,7 +236,7 @@ function atualizarDashboard() {
 }
 
 function atualizarMedalha() {
-    var m = 'Nenhuma';
+    let m = 'Nenhuma';
     if (sistema.pontos >= 500) m = '👑 Mestre Sentinela';
     else if (sistema.pontos >= 350) m = '🥇 Ouro';
     else if (sistema.pontos >= 200) m = '🥈 Prata';
@@ -277,7 +277,7 @@ function exibirResultadoErro(msg) {
 }
 
 function adicionarAoHistorico(texto, classificacao, motivo, score) {
-    var item = { texto, classificacao, motivo, score, data: Date.now() };
+    const item = { texto, classificacao, motivo, score, data: Date.now() };
     sistema.historicoAnalises.unshift(item);
     if (sistema.historicoAnalises.length > CONFIG.MAX_HISTORICO) {
         sistema.historicoAnalises.pop();
@@ -286,30 +286,29 @@ function adicionarAoHistorico(texto, classificacao, motivo, score) {
 }
 
 function renderizarHistorico() {
-    var container = DOM.listaHistorico;
+    const container = DOM.listaHistorico;
     if (!container) return;
     if (sistema.historicoAnalises.length === 0) {
         container.innerHTML = '<p class="vazio">Nenhuma verificação realizada ainda.</p>';
         return;
     }
-    container.innerHTML = sistema.historicoAnalises.map(function(item, idx) {
-        var icone = { fake: '❌', verdadeira: '✅', suspeita: '⚠️' }[item.classificacao] || '❓';
-        var data = new Date(item.data).toLocaleString('pt-BR');
-        var classe = item.classificacao;
-        var textoCurto = item.texto.length > 60 ? item.texto.substring(0, 60) + '…' : item.texto;
-        return '<div class="item-historico ' + classe + '">' +
-            '<div class="h-titulo">' + icone + ' ' + classe.toUpperCase() + ' — ' + item.score + '%</div>' +
-            '<div class="h-texto">' + textoCurto + '</div>' +
-            '<button class="btn-ver-mais-historico" data-idx="' + idx + '">Ver mais ▼</button>' +
-            '<div class="h-detalhes" id="detalhes-' + idx + '">' + item.motivo + '</div>' +
-            '<div class="h-data">' + data + '</div>' +
-            '</div>';
+    container.innerHTML = sistema.historicoAnalises.map((item, idx) => {
+        const icone = { fake: '❌', verdadeira: '✅', suspeita: '⚠️' }[item.classificacao] || '❓';
+        const data = new Date(item.data).toLocaleString('pt-BR');
+        const textoCurto = item.texto.length > 60 ? item.texto.substring(0, 60) + '…' : item.texto;
+        return `<div class="item-historico ${item.classificacao}">
+            <div class="h-titulo">${icone} ${item.classificacao.toUpperCase()} — ${item.score}%</div>
+            <div class="h-texto">${textoCurto}</div>
+            <button class="btn-ver-mais-historico" data-idx="${idx}">Ver mais ▼</button>
+            <div class="h-detalhes" id="detalhes-${idx}" style="display:none">${item.motivo}</div>
+            <div class="h-data">${data}</div>
+        </div>`;
     }).join('');
 
-    document.querySelectorAll('.btn-ver-mais-historico').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            var idx = this.dataset.idx;
-            var detalhes = document.getElementById('detalhes-' + idx);
+    document.querySelectorAll('.btn-ver-mais-historico').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const idx = this.dataset.idx;
+            const detalhes = document.getElementById('detalhes-' + idx);
             if (detalhes.style.display === 'none') {
                 detalhes.style.display = 'block';
                 this.textContent = 'Ver menos ▲';
@@ -322,67 +321,57 @@ function renderizarHistorico() {
 }
 
 function calcularScoreLocal(texto) {
-    var textoLower = texto.toLowerCase();
-    var scoreFake = 0,
-        scoreConfiavel = 0;
-    var palavrasSuspeitasEncontradas = 0,
-        palavrasConfiaveisEncontradas = 0;
+    const textoLower = texto.toLowerCase();
+    let scoreFake = 0, scoreConfiavel = 0;
+    let palavrasSuspeitasEncontradas = 0, palavrasConfiaveisEncontradas = 0;
 
-    for (var i = 0; i < PALAVRAS_FAKE.length; i++) {
-        if (textoLower.indexOf(PALAVRAS_FAKE[i].palavra) !== -1) {
-            scoreFake += PALAVRAS_FAKE[i].peso;
+    PALAVRAS_FAKE.forEach(p => {
+        if (textoLower.includes(p.palavra)) {
+            scoreFake += p.peso;
             palavrasSuspeitasEncontradas++;
         }
-    }
-    for (var j = 0; j < PALAVRAS_CONFIAVEIS.length; j++) {
-        if (textoLower.indexOf(PALAVRAS_CONFIAVEIS[j].palavra) !== -1) {
-            scoreConfiavel += PALAVRAS_CONFIAVEIS[j].peso;
+    });
+    PALAVRAS_CONFIAVEIS.forEach(p => {
+        if (textoLower.includes(p.palavra)) {
+            scoreConfiavel += p.peso;
             palavrasConfiaveisEncontradas++;
         }
-    }
+    });
 
-    var fontesEncontradas = 0;
-    for (var k = 0; k < DOMINIOS_CONFIAVEIS.length; k++) {
-        if (textoLower.indexOf(DOMINIOS_CONFIAVEIS[k]) !== -1) {
+    let fontesEncontradas = 0;
+    DOMINIOS_CONFIAVEIS.forEach(d => {
+        if (textoLower.includes(d)) {
             fontesEncontradas++;
             scoreConfiavel += 10;
         }
-    }
+    });
 
-    var tamanho = texto.length;
-    var estruturaScore = 0;
+    const tamanho = texto.length;
+    let estruturaScore = 0;
     if (tamanho < 10) estruturaScore += 2;
     else if (tamanho < 30) estruturaScore += 4;
     else if (tamanho < 60) estruturaScore += 5;
     else if (tamanho > 300) estruturaScore += 3;
 
-    var maiusculas = (texto.match(/[A-Z]/g) || []).length;
+    const maiusculas = (texto.match(/[A-Z]/g) || []).length;
     if (tamanho > 0 && (maiusculas / tamanho) > 0.25) estruturaScore += 8;
-
-    var exclamacoes = (texto.match(/!/g) || []).length;
+    const exclamacoes = (texto.match(/!/g) || []).length;
     if (exclamacoes > 2) estruturaScore += 6;
     if (exclamacoes > 5) estruturaScore += 4;
-
-    var perguntas = (texto.match(/\?/g) || []).length;
+    const perguntas = (texto.match(/\?/g) || []).length;
     if (perguntas > 1) estruturaScore += 3;
 
-    var palavras = textoLower.split(/\s+/);
-    var freq = {};
-    for (var p = 0; p < palavras.length; p++) {
-        freq[palavras[p]] = (freq[palavras[p]] || 0) + 1;
-    }
-    var repeticoes = 0;
-    for (var key in freq) {
-        if (freq[key] > 4) repeticoes++;
-    }
+    const palavras = textoLower.split(/\s+/);
+    const freq = {};
+    palavras.forEach(p => freq[p] = (freq[p] || 0) + 1);
+    let repeticoes = 0;
+    for (const key in freq) if (freq[key] > 4) repeticoes++;
     if (repeticoes > 0) estruturaScore += 5;
 
-    var scoreFinal = 50;
-    scoreFinal += (scoreConfiavel * 1.2) - (scoreFake * 1.0) - estruturaScore;
+    let scoreFinal = 50 + (scoreConfiavel * 1.2) - (scoreFake * 1.0) - estruturaScore;
     if (palavrasSuspeitasEncontradas > 0 && palavrasConfiaveisEncontradas === 0) scoreFinal -= 15;
     if (palavrasConfiaveisEncontradas > 0 && palavrasSuspeitasEncontradas === 0) scoreFinal += 15;
     if (fontesEncontradas > 0) scoreFinal += 10;
-
     if (palavrasSuspeitasEncontradas === 0 && palavrasConfiaveisEncontradas === 0 && fontesEncontradas === 0) {
         if (tamanho > 100) scoreFinal += 8;
         else if (tamanho > 50) scoreFinal += 3;
@@ -392,29 +381,25 @@ function calcularScoreLocal(texto) {
 }
 
 function verificarBaseConhecimento(texto) {
-    if (BASE_CONHECIMENTO.length === 0) return { encontrou: false };
-    var textoLower = texto.toLowerCase().trim();
-    var palavrasUsuario = textoLower.split(/\s+/).filter(function(p) { return p.length > 3; });
-    var melhorFato = null;
-    var melhorPontuacao = 0;
+    if (!BASE_CONHECIMENTO.length) return { encontrou: false };
+    const textoLower = texto.toLowerCase().trim();
+    const palavrasUsuario = textoLower.split(/\s+/).filter(p => p.length > 3);
+    let melhorFato = null, melhorPontuacao = 0;
 
-    for (var i = 0; i < BASE_CONHECIMENTO.length; i++) {
-        var fato = BASE_CONHECIMENTO[i];
-        var perguntaFato = fato.pergunta.toLowerCase();
-        var pontuacao = 0;
-        for (var u = 0; u < palavrasUsuario.length; u++) {
-            if (perguntaFato.indexOf(palavrasUsuario[u]) !== -1) {
-                pontuacao++;
-            }
-        }
+    BASE_CONHECIMENTO.forEach(fato => {
+        const perguntaFato = fato.pergunta.toLowerCase();
+        let pontuacao = 0;
+        palavrasUsuario.forEach(p => {
+            if (perguntaFato.includes(p)) pontuacao++;
+        });
         if (pontuacao > melhorPontuacao && pontuacao >= 2) {
             melhorPontuacao = pontuacao;
             melhorFato = fato;
         }
-    }
+    });
 
     if (melhorFato) {
-        var confidence = melhorPontuacao >= 4 ? 85 : 70;
+        const confidence = melhorPontuacao >= 4 ? 85 : 70;
         return {
             encontrou: true,
             classificacao: melhorFato.resposta,
@@ -426,7 +411,7 @@ function verificarBaseConhecimento(texto) {
 }
 
 // ================================================================
-// ANÁLISE COM IA GROQ (GRÁTIS, SEM CORS)
+// ANÁLISE COM IA GROQ
 // ================================================================
 
 const GROQ_API_KEY = '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';
@@ -438,7 +423,7 @@ async function analisarComIA(texto) {
         const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': 'Bearer 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',
+                'Authorization': 'Bearer ' + GROQ_API_KEY,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
@@ -448,10 +433,7 @@ async function analisarComIA(texto) {
                         role: 'system',
                         content: 'Classifique a notícia como verdadeira, fake ou suspeita. Responda apenas com um objeto JSON: {"classificacao": "verdadeira/fake/suspeita", "score": 0-100, "explicacao": "texto em português"}'
                     },
-                    {
-                        role: 'user',
-                        content: texto
-                    }
+                    { role: 'user', content: texto }
                 ],
                 temperature: 0.3,
                 max_tokens: 200
@@ -459,15 +441,12 @@ async function analisarComIA(texto) {
         });
 
         const dados = await resposta.json();
-
         if (!resposta.ok) {
-            console.error('❌ Detalhes do erro da Groq:', dados);
+            console.error('❌ Erro Groq:', dados);
             return { encontrou: false };
         }
 
-        const conteudo = dados.choices[0].message.content;
-        console.log('🧠 IA respondeu:', conteudo);
-
+        const conteudo = dados.choices?.[0]?.message?.content || '';
         let json;
         try {
             const match = conteudo.match(/\{[\s\S]*\}/);
@@ -477,8 +456,8 @@ async function analisarComIA(texto) {
                 (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
             return {
                 encontrou: true,
-                classificacao: classificacao,
-                explicacao: conteudo.substring(0, 300),
+                classificacao,
+                explicacao: conteudo.substring(0, 300) || 'Análise concluída.',
                 score: 70
             };
         }
@@ -489,152 +468,47 @@ async function analisarComIA(texto) {
             explicacao: json.explicacao || 'Análise concluída.',
             score: json.score || 70
         };
-
     } catch (erro) {
-        console.error('❌ Erro na IA:', erro.message);
-        return { encontrou: false };
-    }
-}
-
-        if (!resposta.ok) {
-            console.warn('⚠️ Erro na API:', resposta.status);
-            return { encontrou: false };
-        }
-
-        const dados = await resposta.json();
-        const conteudo = dados.choices[0].message.content;
-        console.log('🧠 IA respondeu:', conteudo);
-
-        let json;
-        try {
-            const match = conteudo.match(/\{[\s\S]*\}/);
-            json = JSON.parse(match ? match[0] : conteudo);
-        } catch (e) {
-            const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
-                (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
-            return {
-                encontrou: true,
-                classificacao: classificacao,
-                explicacao: conteudo.substring(0, 300),
-                score: 70
-            };
-        }
-
-        return {
-            encontrou: true,
-            classificacao: json.classificacao || 'suspeita',
-            explicacao: json.explicacao || 'Análise concluída.',
-            score: json.score || 70
-        };
-
-    } catch (erro) {
-        console.error('❌ Erro na IA:', erro.message);
-        return { encontrou: false };
-    }
-}
-
-async function analisarComIA(texto) {
-    try {
-        exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, 'Processando com Groq...', 0, 'suspeita');
-
-        const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer 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',
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: 'llama3-8b-8192',
-                messages: [
-                    {
-                        role: 'system',
-                        content: 'Classifique a notícia como verdadeira, fake ou suspeita. Responda apenas com JSON: {"classificacao":"...", "score":0, "explicacao":"..."}'
-                    },
-                    {
-                        role: 'user',
-                        content: texto
-                    }
-                ],
-                temperature: 0.3,
-                max_tokens: 200
-            })
-        });
-
-        const dados = await resposta.json();
-
-        if (!resposta.ok) {
-            console.error('❌ Erro da Groq:', dados);
-            return { encontrou: false };
-        }
-
-        const conteudo = dados.choices[0].message.content;
-        console.log('🧠 IA respondeu:', conteudo);
-
-        let json;
-        try {
-            const match = conteudo.match(/\{[\s\S]*\}/);
-            json = JSON.parse(match ? match[0] : conteudo);
-        } catch (e) {
-            const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
-                (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
-            return {
-                encontrou: true,
-                classificacao: classificacao,
-                explicacao: conteudo.substring(0, 300),
-                score: 70
-            };
-        }
-
-        return {
-            encontrou: true,
-            classificacao: json.classificacao || 'suspeita',
-            explicacao: json.explicacao || 'Análise concluída.',
-            score: json.score || 70
-        };
-
-    } catch (erro) {
-        console.error('❌ Erro na IA:', erro.message);
+        console.error('❌ Erro IA:', erro.message);
         return { encontrou: false };
     }
 }
 
 // ================================================================
-// FUNÇÃO PRINCIPAL DE ANÁLISE (IA + FALLBACK)
+// FUNÇÃO PRINCIPAL DE ANÁLISE
 // ================================================================
 
 async function analisarNoticia() {
     if (!DOM.textoNoticia) return;
-    var texto = DOM.textoNoticia.value.trim();
+    const texto = DOM.textoNoticia.value.trim();
     if (!texto) {
         exibirResultadoErro('⚠️ Digite uma informação para verificar.');
         return;
     }
 
-    // ---- TENTAR IA DEEPSEEK ----
-    var resultadoIA = await analisarComIA(texto);
-    if (resultadoIA && resultadoIA.encontrou) {
-        var icone = resultadoIA.classificacao === 'verdadeira' ? '✅' :
-            resultadoIA.classificacao === 'fake' ? '❌' : '⚠️';
-        var titulo = resultadoIA.classificacao === 'verdadeira' ? 'Verdadeira' :
-            resultadoIA.classificacao === 'fake' ? 'Falsa' : 'Suspeita';
-        var cor = resultadoIA.classificacao === 'verdadeira' ? '#166534' :
-            resultadoIA.classificacao === 'fake' ? '#991b1b' : '#a16207';
+    // 1. Tentar IA
+    const resultadoIA = await analisarComIA(texto);
+    if (resultadoIA.encontrou) {
+        const icone = resultadoIA.classificacao === 'verdadeira' ? '✅' : resultadoIA.classificacao === 'fake' ? '❌' : '⚠️';
+        const titulo = resultadoIA.classificacao === 'verdadeira' ? 'Verdadeira' : resultadoIA.classificacao === 'fake' ? 'Falsa' : 'Suspeita';
+        const cor = resultadoIA.classificacao === 'verdadeira' ? '#166534' : resultadoIA.classificacao === 'fake' ? '#991b1b' : '#a16207';
         exibirResultado(icone, titulo, cor, texto, resultadoIA.explicacao, resultadoIA.score, resultadoIA.classificacao);
         sistema.analisadas++;
         sistema.ultimaAnalise = Date.now();
-        if (resultadoIA.classificacao === 'fake') { sistema.fake++;
-            sistema.pontos += 15; } else if (resultadoIA.classificacao === 'verdadeira') { sistema.verdadeiras++;
-            sistema.pontos += 10; } else { sistema.suspeitas++;
-            sistema.pontos += 5; }
+        if (resultadoIA.classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
+        else if (resultadoIA.classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
+        else { sistema.suspeitas++; sistema.pontos += 5; }
         adicionarAoHistorico(texto, resultadoIA.classificacao, resultadoIA.explicacao, resultadoIA.score);
         atualizarDashboard();
         salvarDados();
         DOM.textoNoticia.value = '';
+        // Enviar comando para Micro:bit real se conectado
+        enviarParaMicrobit(resultadoIA.classificacao === 'fake' ? 'F' : resultadoIA.classificacao === 'verdadeira' ? 'V' : 'S');
         return;
     }
 
-    // ---- FATOS DE EMERGÊNCIA ----
-    var fatosEmergencia = [
+    // 2. Fatos de emergência
+    const fatosEmergencia = [
         { pergunta: 'vacinas causam autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento. Fonte: OMS.' },
         { pergunta: 'vacina causa autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento. Fonte: OMS.' },
         { pergunta: 'a terra é plana', resposta: 'fake', explicacao: '❌ Falso! Terra é esferoide.' },
@@ -642,66 +516,86 @@ async function analisarNoticia() {
         { pergunta: 'o sol é uma estrela', resposta: 'verdadeira', explicacao: '✅ Verdadeiro! Sol é uma estrela.' },
         { pergunta: 'a lua tem luz própria', resposta: 'fake', explicacao: '❌ Falso! Lua reflete luz do Sol.' }
     ];
-
-    var textoLower = texto.toLowerCase();
-    for (var f = 0; f < fatosEmergencia.length; f++) {
-        var fato = fatosEmergencia[f];
-        if (textoLower.indexOf(fato.pergunta) !== -1) {
-            var icone2 = fato.resposta === 'verdadeira' ? '✅' : '❌';
-            var titulo2 = fato.resposta === 'verdadeira' ? 'Verdadeira' : 'Falsa';
-            var cor2 = fato.resposta === 'verdadeira' ? '#166534' : '#991b1b';
-            exibirResultado(icone2, titulo2, cor2, texto, fato.explicacao, 95, fato.resposta);
+    const textoLower = texto.toLowerCase();
+    for (const fato of fatosEmergencia) {
+        if (textoLower.includes(fato.pergunta)) {
+            exibirResultado('✅', fato.resposta === 'verdadeira' ? 'Verdadeira' : 'Falsa', fato.resposta === 'verdadeira' ? '#166534' : '#991b1b', texto, fato.explicacao, 95, fato.resposta);
             sistema.analisadas++;
             sistema.ultimaAnalise = Date.now();
-            if (fato.resposta === 'fake') { sistema.fake++;
-                sistema.pontos += 15; } else { sistema.verdadeiras++;
-                sistema.pontos += 10; }
+            if (fato.resposta === 'fake') { sistema.fake++; sistema.pontos += 15; }
+            else { sistema.verdadeiras++; sistema.pontos += 10; }
             adicionarAoHistorico(texto, fato.resposta, fato.explicacao, 95);
             atualizarDashboard();
             salvarDados();
             DOM.textoNoticia.value = '';
+            enviarParaMicrobit(fato.resposta === 'fake' ? 'F' : 'V');
             return;
         }
     }
 
-    // ---- FALLBACK BASE LOCAL ----
-    var temPortugues = /[áàâãéèêíïóôõúç]/i.test(texto);
-    var textoBusca = temPortugues ? await traduzirParaIngles(texto) : texto;
-    var resultadoBase = verificarBaseConhecimento(textoBusca);
+    // 3. Base local
+    const temPortugues = /[áàâãéèêíïóôõúç]/i.test(texto);
+    const textoBusca = temPortugues ? await traduzirParaIngles(texto) : texto;
+    const resultadoBase = verificarBaseConhecimento(textoBusca);
     if (resultadoBase.encontrou) {
-        var icone3 = resultadoBase.classificacao === 'verdadeira' ? '✅' :
-            resultadoBase.classificacao === 'fake' ? '❌' : '⚠️';
-        var titulo3 = resultadoBase.classificacao === 'verdadeira' ? 'Verdadeira' :
-            resultadoBase.classificacao === 'fake' ? 'Falsa' : 'Suspeita';
-        var cor3 = resultadoBase.classificacao === 'verdadeira' ? '#166534' :
-            resultadoBase.classificacao === 'fake' ? '#991b1b' : '#a16207';
-        exibirResultado(icone3, titulo3, cor3, texto, resultadoBase.explicacao, resultadoBase.score, resultadoBase.classificacao);
+        exibirResultado(
+            resultadoBase.classificacao === 'verdadeira' ? '✅' : resultadoBase.classificacao === 'fake' ? '❌' : '⚠️',
+            resultadoBase.classificacao === 'verdadeira' ? 'Verdadeira' : resultadoBase.classificacao === 'fake' ? 'Falsa' : 'Suspeita',
+            resultadoBase.classificacao === 'verdadeira' ? '#166534' : resultadoBase.classificacao === 'fake' ? '#991b1b' : '#a16207',
+            texto, resultadoBase.explicacao, resultadoBase.score, resultadoBase.classificacao
+        );
         sistema.analisadas++;
         sistema.ultimaAnalise = Date.now();
-        if (resultadoBase.classificacao === 'fake') { sistema.fake++;
-            sistema.pontos += 15; } else if (resultadoBase.classificacao === 'verdadeira') { sistema.verdadeiras++;
-            sistema.pontos += 10; } else { sistema.suspeitas++;
-            sistema.pontos += 5; }
+        if (resultadoBase.classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
+        else if (resultadoBase.classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
+        else { sistema.suspeitas++; sistema.pontos += 5; }
         adicionarAoHistorico(texto, resultadoBase.classificacao, resultadoBase.explicacao, resultadoBase.score);
         atualizarDashboard();
         salvarDados();
         DOM.textoNoticia.value = '';
+        enviarParaMicrobit(resultadoBase.classificacao === 'fake' ? 'F' : resultadoBase.classificacao === 'verdadeira' ? 'V' : 'S');
         return;
     }
 
-    // ---- FALLBACK LOCAL (palavras) ----
-    var scoreLocal = calcularScoreLocal(texto);
+    // 4. Fallback local
+    const scoreLocal = calcularScoreLocal(texto);
     analisarLocalComScore(texto, scoreLocal);
 }
 
+function analisarLocalComScore(texto, score) {
+    let classificacao = 'suspeita';
+    if (score < 40) classificacao = 'fake';
+    else if (score >= 70) classificacao = 'verdadeira';
+
+    const cor = classificacao === 'verdadeira' ? '#166534' : classificacao === 'fake' ? '#991b1b' : '#a16207';
+    const icone = classificacao === 'verdadeira' ? '✅' : classificacao === 'fake' ? '❌' : '⚠️';
+    const titulo = classificacao === 'verdadeira' ? 'Verdadeira' : classificacao === 'fake' ? 'Falsa' : 'Suspeita';
+    const explicacao = `Análise local: ${score}% de confiança. ` +
+        (classificacao === 'fake' ? 'Palavras suspeitas encontradas.' :
+         classificacao === 'verdadeira' ? 'Fontes confiáveis detectadas.' :
+         'Sem fontes claras.');
+
+    exibirResultado(icone, titulo, cor, texto, explicacao, score, classificacao);
+    sistema.analisadas++;
+    sistema.ultimaAnalise = Date.now();
+    if (classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
+    else if (classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
+    else { sistema.suspeitas++; sistema.pontos += 5; }
+    adicionarAoHistorico(texto, classificacao, explicacao, score);
+    atualizarDashboard();
+    salvarDados();
+    DOM.textoNoticia.value = '';
+    enviarParaMicrobit(classificacao === 'fake' ? 'F' : classificacao === 'verdadeira' ? 'V' : 'S');
+}
+
 // ================================================================
-// JOGO — MISSÃO DOS SENTINELAS
+// JOGO
 // ================================================================
 
-var perguntaAtual = null;
+let perguntaAtual = null;
 
 function novaMissao() {
-    var idx = Math.floor(Math.random() * PERGUNTAS.length);
+    const idx = Math.floor(Math.random() * PERGUNTAS.length);
     perguntaAtual = PERGUNTAS[idx];
     if (DOM.pergunta) DOM.pergunta.textContent = perguntaAtual.texto;
     if (DOM.feedbackMissao) DOM.feedbackMissao.style.display = 'none';
@@ -709,8 +603,8 @@ function novaMissao() {
 
 function responderMissao(resposta) {
     if (!perguntaAtual) { alert('Clique em "Nova Missão" primeiro!'); return; }
-    var acertou = resposta === perguntaAtual.resposta;
-    var fb = DOM.feedbackMissao;
+    const acertou = resposta === perguntaAtual.resposta;
+    const fb = DOM.feedbackMissao;
     if (!fb) return;
     fb.style.display = 'block';
     if (acertou) {
@@ -719,13 +613,13 @@ function responderMissao(resposta) {
         if (sistema.sequenciaAtual > sistema.maiorSequencia) sistema.maiorSequencia = sistema.sequenciaAtual;
         sistema.pontos += 20;
         fb.style.background = '#166534';
-        fb.innerHTML = '✅ Acertou! ' + perguntaAtual.explicacao + ' +20 pontos! Sequência: ' + sistema.sequenciaAtual;
+        fb.innerHTML = `✅ Acertou! ${perguntaAtual.explicacao} +20 pontos! Sequência: ${sistema.sequenciaAtual}`;
     } else {
         sistema.erros++;
         sistema.sequenciaAtual = 0;
         sistema.pontos = Math.max(0, sistema.pontos - 10);
         fb.style.background = '#991b1b';
-        fb.innerHTML = '❌ Errou. A correta era "' + perguntaAtual.resposta + '". ' + perguntaAtual.explicacao + ' -10 pontos.';
+        fb.innerHTML = `❌ Errou. A correta era "${perguntaAtual.resposta}". ${perguntaAtual.explicacao} -10 pontos.`;
     }
     atualizarMedalha();
     atualizarDashboard();
@@ -734,19 +628,19 @@ function responderMissao(resposta) {
 }
 
 // ================================================================
-// ROBÓTICA (SIMULAÇÃO)
+// ROBÓTICA REAL
 // ================================================================
 
-// Makey Makey
-document.addEventListener('keydown', function(e) {
+// --- Makey Makey (teclado real) ---
+document.addEventListener('keydown', function (e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    var tecla = e.key.toLowerCase();
-    var mapa = { 'a': 'btnVerdade', 's': 'btnSuspeita', 'd': 'btnFake', 'n': 'novaMissao' };
+    const tecla = e.key.toLowerCase();
+    const mapa = { 'a': 'btnVerdade', 's': 'btnSuspeita', 'd': 'btnFake', 'n': 'novaMissao' };
     if (mapa[tecla]) {
-        var btn = document.getElementById(mapa[tecla]);
+        const btn = document.getElementById(mapa[tecla]);
         if (btn) {
             btn.style.transform = 'scale(0.9)';
-            setTimeout(function() { btn.style.transform = ''; }, 200);
+            setTimeout(() => btn.style.transform = '', 200);
         }
     }
     if (tecla === 'a') responderMissao('verdadeira');
@@ -755,52 +649,67 @@ document.addEventListener('keydown', function(e) {
     else if (tecla === 'n') novaMissao();
 });
 
-// Micro:bit (simulação)
-var microConectado = false;
-if (DOM.conectarMicro) {
-    DOM.conectarMicro.addEventListener('click', function() {
-        microConectado = !microConectado;
-        if (DOM.statusMicro) DOM.statusMicro.textContent = microConectado ? '🟢 Conectado (Simulação)' : '🔴 Desconectado (Simulação)';
-        this.textContent = microConectado ? 'Desconectar (Simulação)' : 'Conectar (Simulação)';
-    });
+// --- Micro:bit Real (Web Bluetooth) ---
+let microCaracteristica = null;
+let microConectado = false;
+
+async function conectarMicrobitReal() {
+    if (!navigator.bluetooth) {
+        alert('❌ Web Bluetooth não suportado neste navegador. Use Chrome/Edge.');
+        return;
+    }
+    try {
+        const dispositivo = await navigator.bluetooth.requestDevice({
+            filters: [{ namePrefix: 'BBC micro:bit' }],
+            optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e'] // UART Service
+        });
+        const servidor = await dispositivo.gatt.connect();
+        const servico = await servidor.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+        microCaracteristica = await servico.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e'); // TX
+        microConectado = true;
+        if (DOM.statusMicro) DOM.statusMicro.textContent = '🟢 Micro:bit conectado (real)';
+        if (DOM.conectarMicro) DOM.conectarMicro.textContent = 'Desconectar Micro:bit';
+        console.log('✅ Micro:bit conectado!');
+    } catch (erro) {
+        console.error('❌ Falha ao conectar Micro:bit:', erro);
+        alert('Não foi possível conectar ao Micro:bit.');
+    }
 }
 
 function enviarParaMicrobit(comando) {
-    if (!microConectado) return;
-    var mapa = { F: '🚨 FAKE', V: '✅ VERDADE', S: '⚠️ SUSPEITA' };
-    if (DOM.comandoMicro) DOM.comandoMicro.textContent = 'Último comando: ' + (mapa[comando] || comando);
+    if (!microConectado || !microCaracteristica) return;
+    const texto = comando === 'F' ? 'FAKE\n' : comando === 'V' ? 'VERDADE\n' : 'SUSPEITA\n';
+    const encoder = new TextEncoder();
+    microCaracteristica.writeValue(encoder.encode(texto)).catch(erro => console.error('Erro enviando Micro:bit:', erro));
+    if (DOM.comandoMicro) DOM.comandoMicro.textContent = 'Último comando: ' + (comando === 'F' ? '🚨 FAKE' : comando === 'V' ? '✅ VERDADE' : '⚠️ SUSPEITA');
 }
 
-function piscarLEDs(cor) {
-    var leds = document.querySelectorAll('.led');
-    var classe = cor === 'vermelho' ? 'aceso' : cor === 'verde' ? 'aceso-verde' : 'aceso-amarelo';
-    leds.forEach(function(l) { l.className = 'led'; });
-    leds.forEach(function(l) { l.classList.add(classe); });
-    setTimeout(function() { leds.forEach(function(l) { l.className = 'led'; }); }, 1500);
-}
-
-if (DOM.btnTestarMicro) {
-    DOM.btnTestarMicro.addEventListener('click', function() {
-        if (!microConectado) { alert('Conecte o Micro:bit primeiro!'); return; }
-        piscarLEDs('verde');
-        setTimeout(function() { piscarLEDs('amarelo'); }, 800);
-        setTimeout(function() { piscarLEDs('vermelho'); }, 1600);
+if (DOM.conectarMicro) {
+    DOM.conectarMicro.addEventListener('click', function () {
+        if (microConectado) {
+            // Desconectar (simples)
+            microConectado = false;
+            microCaracteristica = null;
+            if (DOM.statusMicro) DOM.statusMicro.textContent = '🔴 Desconectado';
+            this.textContent = 'Conectar Micro:bit real';
+        } else {
+            conectarMicrobitReal();
+        }
     });
 }
 
-// Sphero (simulação)
-var spheroConectado = false;
-var spheroX = 0,
-    spheroY = 0;
+// --- Sphero (simulação mantida, real requer biblioteca externa) ---
+let spheroConectado = false;
+let spheroX = 0, spheroY = 0;
 if (DOM.conectarSphero) {
-    DOM.conectarSphero.addEventListener('click', function() {
+    DOM.conectarSphero.addEventListener('click', function () {
         spheroConectado = !spheroConectado;
-        if (DOM.statusSphero) DOM.statusSphero.textContent = spheroConectado ? '🟢 Conectado (Simulação)' : '🔴 Desconectado (Simulação)';
-        this.textContent = spheroConectado ? 'Desconectar (Simulação)' : 'Conectar (Simulação)';
+        if (DOM.statusSphero) DOM.statusSphero.textContent = spheroConectado ? '🟢 Conectado (Simulação)' : '🔴 Desconectado';
+        this.textContent = spheroConectado ? 'Desconectar Sphero' : 'Conectar Sphero';
         if (!spheroConectado) {
             spheroX = 0;
             spheroY = 0;
-            var sim = document.getElementById('spheroSim');
+            const sim = document.getElementById('spheroSim');
             if (sim) sim.style.transform = 'translate(0,0)';
         }
     });
@@ -808,57 +717,53 @@ if (DOM.conectarSphero) {
 
 function moverSphero(dir) {
     if (!spheroConectado) { alert('Conecte o Sphero!'); return; }
-    var passo = 25;
+    const passo = 25;
     if (dir === 'frente') spheroY -= passo;
     else if (dir === 'tras') spheroY += passo;
     else if (dir === 'esquerda') spheroX -= passo;
     else if (dir === 'direita') spheroX += passo;
-    var sim = document.getElementById('spheroSim');
+    const sim = document.getElementById('spheroSim');
     if (sim) sim.style.transform = 'translate(' + spheroX + 'px, ' + spheroY + 'px)';
 }
 
 function mudarCorSphero(cor) {
     if (!spheroConectado) return;
-    var el = document.getElementById('spheroSim');
+    const el = document.getElementById('spheroSim');
     if (!el) return;
     el.style.background = cor;
-    setTimeout(function() { if (spheroConectado) el.style.background = '#2563eb'; }, 2000);
+    setTimeout(() => { if (spheroConectado) el.style.background = '#2563eb'; }, 2000);
 }
 
 // ================================================================
 // EVENTOS E INICIALIZAÇÃO
 // ================================================================
 
-if (DOM.btnAnalisar) {
-    DOM.btnAnalisar.addEventListener('click', analisarNoticia);
-}
-
+if (DOM.btnAnalisar) DOM.btnAnalisar.addEventListener('click', analisarNoticia);
 if (DOM.textoNoticia) {
-    DOM.textoNoticia.addEventListener('keydown', function(e) {
+    DOM.textoNoticia.addEventListener('keydown', e => {
         if (e.key === 'Enter' && e.ctrlKey) {
             e.preventDefault();
             analisarNoticia();
         }
     });
 }
-
 if (DOM.btnLimpar) {
-    DOM.btnLimpar.addEventListener('click', function() {
+    DOM.btnLimpar.addEventListener('click', () => {
         if (DOM.textoNoticia) DOM.textoNoticia.value = '';
         if (DOM.resultado) DOM.resultado.style.display = 'none';
     });
 }
 
-document.querySelectorAll('.btn-exemplo').forEach(function(btn) {
-    btn.addEventListener('click', function() {
+document.querySelectorAll('.btn-exemplo').forEach(btn => {
+    btn.addEventListener('click', function () {
         if (DOM.textoNoticia) DOM.textoNoticia.value = this.dataset.texto;
         analisarNoticia();
     });
 });
 
 if (DOM.btnVerMais) {
-    DOM.btnVerMais.addEventListener('click', function() {
-        var detalhes = DOM.resultadoDetalhes;
+    DOM.btnVerMais.addEventListener('click', function () {
+        const detalhes = DOM.resultadoDetalhes;
         if (!detalhes) return;
         if (detalhes.style.display === 'none') {
             detalhes.style.display = 'block';
@@ -871,13 +776,13 @@ if (DOM.btnVerMais) {
 }
 
 if (DOM.novaMissao) DOM.novaMissao.addEventListener('click', novaMissao);
-if (DOM.btnVerdade) DOM.btnVerdade.addEventListener('click', function() { responderMissao('verdadeira'); });
-if (DOM.btnFake) DOM.btnFake.addEventListener('click', function() { responderMissao('fake'); });
-if (DOM.btnSuspeita) DOM.btnSuspeita.addEventListener('click', function() { responderMissao('suspeita'); });
+if (DOM.btnVerdade) DOM.btnVerdade.addEventListener('click', () => responderMissao('verdadeira'));
+if (DOM.btnFake) DOM.btnFake.addEventListener('click', () => responderMissao('fake'));
+if (DOM.btnSuspeita) DOM.btnSuspeita.addEventListener('click', () => responderMissao('suspeita'));
 
 if (DOM.btnLimparHistorico) {
-    DOM.btnLimparHistorico.addEventListener('click', function() {
-        if (sistema.historicoAnalises.length === 0) return;
+    DOM.btnLimparHistorico.addEventListener('click', () => {
+        if (!sistema.historicoAnalises.length) return;
         if (confirm('Limpar todo o histórico?')) {
             sistema.historicoAnalises = [];
             renderizarHistorico();
@@ -887,9 +792,9 @@ if (DOM.btnLimparHistorico) {
 }
 
 if (DOM.btnModoEscuro) {
-    DOM.btnModoEscuro.addEventListener('click', function() {
-        var atual = document.documentElement.getAttribute('data-tema');
-        var novo = atual === 'claro' ? 'escuro' : 'claro';
+    DOM.btnModoEscuro.addEventListener('click', function () {
+        const atual = document.documentElement.getAttribute('data-tema');
+        const novo = atual === 'claro' ? 'escuro' : 'claro';
         document.documentElement.setAttribute('data-tema', novo);
         localStorage.setItem('sentinelaTema', novo);
         this.textContent = novo === 'escuro' ? '🌙' : '☀️';
@@ -899,8 +804,8 @@ if (DOM.btnModoEscuro) {
 if (DOM.btnExportarDados) DOM.btnExportarDados.addEventListener('click', exportarDados);
 if (DOM.btnResetarDados) DOM.btnResetarDados.addEventListener('click', resetarDados);
 
-// ---- INICIALIZAÇÃO ----
-var temaSalvo = localStorage.getItem('sentinelaTema') || 'escuro';
+// Inicialização
+const temaSalvo = localStorage.getItem('sentinelaTema') || 'escuro';
 document.documentElement.setAttribute('data-tema', temaSalvo);
 if (DOM.btnModoEscuro) DOM.btnModoEscuro.textContent = temaSalvo === 'escuro' ? '🌙' : '☀️';
 
@@ -908,6 +813,6 @@ carregarDados();
 novaMissao();
 setInterval(salvarDados, CONFIG.AUTO_SAVE_INTERVAL);
 
-console.log('🛡️ Sentinela da Verdade v10.0 carregado!');
+console.log('🛡️ Sentinela da Verdade v11.0 carregado!');
 console.log('📚 Base:', BASE_CONHECIMENTO.length, 'fatos.');
-console.log('🔑 DeepSeek: ✅ Configurada');
+console.log('🔑 IA Groq: ✅ Configurada');
