@@ -407,6 +407,7 @@ function verificarBaseConhecimento(texto) {
 }
 
 async function analisarComIA(texto) {
+    const GROQ_API_KEY = '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';
     try {
         // Busca dinamicamente os modelos disponíveis
         const respostaModelos = await fetch('https://api.groq.com/openai/v1/models', {
