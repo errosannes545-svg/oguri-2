@@ -1,23 +1,44 @@
-/* ================================================================
-   SENTINELA DA VERDADE — script.js (v10.0 - FINAL)
-   Motor completo com IA DeepSeek + fallback local
-   ================================================================ */
+// ================================================================
+// SENTINELA DA VERDADE — script.js (v10.0 - FUNCIONAL)
+// ================================================================
 
-/// =================================================================
+// =================================================================
 // 0. CONFIGURAÇÕES
 // =================================================================
 
+const CONFIG = {
+    API_KEY: 'AIzaSyDXlbWtCTFQgx2UjOMRecfR6eiWV_aEhqE',
+    API_URL: 'https://factchecktools.googleapis.com/v1alpha1/claims:search',
+    SCORE_API_REF: 85,
+    MAX_HISTORICO: 50,
+    AUTO_SAVE_INTERVAL: 5000,
+};
+
 // =================================================================
-// 0.5. PERSISTÊNCIA (DEFINIDA ANTES DE SER USADA)
+// 1. PERSISTÊNCIA
 // =================================================================
 
 var memoriaFallback = {};
+var sistema = {
+    pontos: 0,
+    medalha: 'Nenhuma',
+    analisadas: 0,
+    fake: 0,
+    verdadeiras: 0,
+    suspeitas: 0,
+    acertos: 0,
+    erros: 0,
+    sequenciaAtual: 0,
+    maiorSequencia: 0,
+    historicoAnalises: [],
+    ultimaAnalise: null,
+    dataInicio: Date.now()
+};
 
 function salvarDados() {
     try {
         localStorage.setItem('sentinelaDados', JSON.stringify(sistema));
     } catch (e) {
-        console.warn('⚠️ localStorage indisponível. Salvando em memória.');
         memoriaFallback = JSON.parse(JSON.stringify(sistema));
     }
 }
@@ -29,27 +50,15 @@ function carregarDados() {
             var dados = JSON.parse(raw);
             Object.assign(sistema, dados);
             if (!sistema.historicoAnalises) sistema.historicoAnalises = [];
-            renderizarHistorico();
-            atualizarDashboard();
-            return;
         }
-    } catch (e) {
-        console.warn('⚠️ localStorage indisponível. Usando fallback em memória.');
-    }
-    if (Object.keys(memoriaFallback).length > 0) {
-        Object.assign(sistema, memoriaFallback);
-        renderizarHistorico();
-        atualizarDashboard();
-    }
+    } catch (e) {}
+    atualizarDashboard();
+    renderizarHistorico();
 }
 
 function resetarDados() {
-    if (!confirm('⚠️ Tem certeza? Todos os dados serão perdidos!')) return;
-    if (!confirm('Última chance!')) return;
-    try {
-        localStorage.removeItem('sentinelaDados');
-    } catch(e) {}
-    memoriaFallback = {};
+    if (!confirm('⚠️ Tem certeza?')) return;
+    localStorage.removeItem('sentinelaDados');
     location.reload();
 }
 
@@ -57,53 +66,37 @@ function exportarDados() {
     var blob = new Blob([JSON.stringify(sistema, null, 2)], { type: 'application/json' });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'sentinela_' + new Date().toISOString().slice(0,10) + '.json';
+    a.download = 'sentinela_' + new Date().toISOString().slice(0, 10) + '.json';
     a.click();
 }
 
-const CONFIG = {
-    API_KEY: 'AIzaSyDXlbWtCTFQgx2UjOMRecfR6eiWV_aEhqE',
-    API_URL: 'https://factchecktools.googleapis.com/v1alpha1/claims:search',
-    SCORE_API_REF: 85,
-    MAX_HISTORICO: 50,
-    AUTO_SAVE_INTERVAL: 5000,
-};
-
-// ================================================================
-// TRADUTOR (usa Google Translate - gratuito, sem CORS)
-// ================================================================
+// =================================================================
+// 2. TRADUTOR (Google Translate)
+// =================================================================
 
 async function traduzirParaIngles(texto) {
     try {
         const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=pt&tl=en&dt=t&q=${encodeURIComponent(texto)}`;
         const resposta = await fetch(url);
         const dados = await resposta.json();
-        if (dados && dados[0] && dados[0][0] && dados[0][0][0]) {
-            return dados[0][0][0];
-        }
-        console.warn('⚠️ Tradução falhou. Usando texto original.');
-        return texto;
-    } catch (erro) {
-        console.warn('⚠️ Erro na tradução:', erro.message);
+        return dados[0][0][0] || texto;
+    } catch (e) {
         return texto;
     }
 }
 
 // =================================================================
-// 1. CARREGAR BASE DE CONHECIMENTO
+// 3. BASE DE CONHECIMENTO
 // =================================================================
 
 let BASE_CONHECIMENTO = [];
-
 if (typeof window.BASE_CONHECIMENTO !== 'undefined' && window.BASE_CONHECIMENTO) {
     BASE_CONHECIMENTO = window.BASE_CONHECIMENTO;
-    console.log('✅ Base carregada do window:', BASE_CONHECIMENTO.length, 'fatos.');
-} else {
-    console.warn('⚠️ Base não encontrada no window. O arquivo conhecimento.js pode não ter carregado.');
+    console.log('✅ Base carregada:', BASE_CONHECIMENTO.length, 'fatos.');
 }
 
 // =================================================================
-// 2. PALAVRAS PARA ANÁLISE LOCAL (FALLBACK)
+// 4. PALAVRAS PARA ANÁLISE LOCAL
 // =================================================================
 
 const PALAVRAS_FAKE = [
@@ -133,7 +126,7 @@ const DOMINIOS_CONFIAVEIS = [
 ];
 
 // =================================================================
-// 3. PERGUNTAS DO JOGO
+// 5. PERGUNTAS DO JOGO
 // =================================================================
 
 const PERGUNTAS = [
@@ -150,27 +143,7 @@ const PERGUNTAS = [
 ];
 
 // =================================================================
-// 4. ESTADO DO SISTEMA
-// =================================================================
-
-const sistema = {
-    pontos: 0,
-    medalha: 'Nenhuma',
-    analisadas: 0,
-    fake: 0,
-    verdadeiras: 0,
-    suspeitas: 0,
-    acertos: 0,
-    erros: 0,
-    sequenciaAtual: 0,
-    maiorSequencia: 0,
-    historicoAnalises: [],
-    ultimaAnalise: null,
-    dataInicio: Date.now()
-};
-
-// =================================================================
-// 5. REFERÊNCIAS DOM (com verificação)
+// 6. DOM REFERÊNCIAS
 // =================================================================
 
 function getElement(id) {
@@ -229,7 +202,7 @@ const DOM = {
 };
 
 // =================================================================
-// 6. FUNÇÕES DE ATUALIZAÇÃO
+// 7. FUNÇÕES DE UI
 // =================================================================
 
 function atualizarDashboard() {
@@ -243,17 +216,17 @@ function atualizarDashboard() {
     if (DOM.erros) DOM.erros.textContent = sistema.erros;
     if (DOM.sequencia) DOM.sequencia.textContent = sistema.sequenciaAtual;
 
-    const total = sistema.acertos + sistema.erros;
-    const taxa = total > 0 ? Math.round((sistema.acertos / total) * 100) : 0;
+    var total = sistema.acertos + sistema.erros;
+    var taxa = total > 0 ? Math.round((sistema.acertos / total) * 100) : 0;
     if (DOM.taxaAcerto) DOM.taxaAcerto.textContent = taxa + '%';
     if (DOM.maiorSequencia) DOM.maiorSequencia.textContent = sistema.maiorSequencia;
 
     if (sistema.dataInicio && DOM.mediaDia) {
-        const dias = Math.max(1, Math.ceil((Date.now() - sistema.dataInicio) / (1000 * 60 * 60 * 24)));
+        var dias = Math.max(1, Math.ceil((Date.now() - sistema.dataInicio) / (1000 * 60 * 60 * 24)));
         DOM.mediaDia.textContent = Math.round(sistema.analisadas / dias);
     }
 
-    const totalGeral = sistema.fake + sistema.verdadeiras + sistema.suspeitas;
+    var totalGeral = sistema.fake + sistema.verdadeiras + sistema.suspeitas;
     if (totalGeral > 0) {
         if (DOM.barFake) DOM.barFake.style.width = ((sistema.fake / totalGeral) * 100) + '%';
         if (DOM.barVerdade) DOM.barVerdade.style.width = ((sistema.verdadeiras / totalGeral) * 100) + '%';
@@ -263,7 +236,7 @@ function atualizarDashboard() {
 }
 
 function atualizarMedalha() {
-    let m = 'Nenhuma';
+    var m = 'Nenhuma';
     if (sistema.pontos >= 500) m = '👑 Mestre Sentinela';
     else if (sistema.pontos >= 350) m = '🥇 Ouro';
     else if (sistema.pontos >= 200) m = '🥈 Prata';
@@ -272,16 +245,11 @@ function atualizarMedalha() {
     if (DOM.medalha) DOM.medalha.textContent = m;
 }
 
-// =================================================================
-// 7. EXIBIÇÃO DE RESULTADO
-// =================================================================
-
 function exibirResultado(icone, titulo, cor, texto, motivo, score, classificacao) {
     if (!DOM.resultado) return;
     DOM.resultado.style.display = 'block';
     DOM.resultado.style.borderLeftColor = cor;
     DOM.resultado.style.background = cor + '33';
-
     if (DOM.resultadoIcone) DOM.resultadoIcone.textContent = icone;
     if (DOM.resultadoTitulo) DOM.resultadoTitulo.textContent = titulo;
     if (DOM.resultadoScore) DOM.resultadoScore.textContent = score + '%';
@@ -291,10 +259,7 @@ function exibirResultado(icone, titulo, cor, texto, motivo, score, classificacao
     if (DOM.resultadoAnaliseDetalhada) DOM.resultadoAnaliseDetalhada.innerHTML = motivo;
     if (DOM.resultadoScoreDetalhado) DOM.resultadoScoreDetalhado.textContent = score;
     if (DOM.resultadoDetalhes) DOM.resultadoDetalhes.style.display = 'none';
-    if (DOM.btnVerMais) {
-        DOM.btnVerMais.textContent = '📖 Ver mais ▼';
-        DOM.btnVerMais.style.display = 'inline-block';
-    }
+    if (DOM.btnVerMais) DOM.btnVerMais.textContent = '📖 Ver mais ▼';
 }
 
 function exibirResultadoErro(msg) {
@@ -311,12 +276,8 @@ function exibirResultadoErro(msg) {
     if (DOM.btnVerMais) DOM.btnVerMais.style.display = 'none';
 }
 
-// =================================================================
-// 8. HISTÓRICO
-// =================================================================
-
 function adicionarAoHistorico(texto, classificacao, motivo, score) {
-    const item = { texto, classificacao, motivo, score, data: Date.now() };
+    var item = { texto, classificacao, motivo, score, data: Date.now() };
     sistema.historicoAnalises.unshift(item);
     if (sistema.historicoAnalises.length > CONFIG.MAX_HISTORICO) {
         sistema.historicoAnalises.pop();
@@ -325,7 +286,7 @@ function adicionarAoHistorico(texto, classificacao, motivo, score) {
 }
 
 function renderizarHistorico() {
-    const container = DOM.listaHistorico;
+    var container = DOM.listaHistorico;
     if (!container) return;
     if (sistema.historicoAnalises.length === 0) {
         container.innerHTML = '<p class="vazio">Nenhuma verificação realizada ainda.</p>';
@@ -360,14 +321,12 @@ function renderizarHistorico() {
     });
 }
 
-// =================================================================
-// 9. CÁLCULO DO SCORE LOCAL (FALLBACK)
-// =================================================================
-
 function calcularScoreLocal(texto) {
     var textoLower = texto.toLowerCase();
-    var scoreFake = 0, scoreConfiavel = 0;
-    var palavrasSuspeitasEncontradas = 0, palavrasConfiaveisEncontradas = 0;
+    var scoreFake = 0,
+        scoreConfiavel = 0;
+    var palavrasSuspeitasEncontradas = 0,
+        palavrasConfiaveisEncontradas = 0;
 
     for (var i = 0; i < PALAVRAS_FAKE.length; i++) {
         if (textoLower.indexOf(PALAVRAS_FAKE[i].palavra) !== -1) {
@@ -420,7 +379,6 @@ function calcularScoreLocal(texto) {
 
     var scoreFinal = 50;
     scoreFinal += (scoreConfiavel * 1.2) - (scoreFake * 1.0) - estruturaScore;
-
     if (palavrasSuspeitasEncontradas > 0 && palavrasConfiaveisEncontradas === 0) scoreFinal -= 15;
     if (palavrasConfiaveisEncontradas > 0 && palavrasSuspeitasEncontradas === 0) scoreFinal += 15;
     if (fontesEncontradas > 0) scoreFinal += 10;
@@ -430,33 +388,25 @@ function calcularScoreLocal(texto) {
         else if (tamanho > 50) scoreFinal += 3;
         else scoreFinal -= 3;
     }
-
     return Math.max(5, Math.min(100, Math.round(scoreFinal)));
 }
 
-// =================================================================
-// 10. BUSCA INTELIGENTE NA BASE DE CONHECIMENTO
-// =================================================================
-
 function verificarBaseConhecimento(texto) {
     if (BASE_CONHECIMENTO.length === 0) return { encontrou: false };
+    var textoLower = texto.toLowerCase().trim();
+    var palavrasUsuario = textoLower.split(/\s+/).filter(function(p) { return p.length > 3; });
+    var melhorFato = null;
+    var melhorPontuacao = 0;
 
-    const textoLower = texto.toLowerCase().trim();
-    const palavrasUsuario = textoLower.split(/\s+/).filter(p => p.length > 3);
-
-    let melhorFato = null;
-    let melhorPontuacao = 0;
-
-    for (const fato of BASE_CONHECIMENTO) {
-        const perguntaFato = fato.pergunta.toLowerCase();
-        let pontuacao = 0;
-
-        for (const pUser of palavrasUsuario) {
-            if (perguntaFato.includes(pUser)) {
+    for (var i = 0; i < BASE_CONHECIMENTO.length; i++) {
+        var fato = BASE_CONHECIMENTO[i];
+        var perguntaFato = fato.pergunta.toLowerCase();
+        var pontuacao = 0;
+        for (var u = 0; u < palavrasUsuario.length; u++) {
+            if (perguntaFato.indexOf(palavrasUsuario[u]) !== -1) {
                 pontuacao++;
             }
         }
-
         if (pontuacao > melhorPontuacao && pontuacao >= 2) {
             melhorPontuacao = pontuacao;
             melhorFato = fato;
@@ -464,177 +414,19 @@ function verificarBaseConhecimento(texto) {
     }
 
     if (melhorFato) {
-        const confidence = melhorPontuacao >= 4 ? 85 : 70;
+        var confidence = melhorPontuacao >= 4 ? 85 : 70;
         return {
             encontrou: true,
             classificacao: melhorFato.resposta,
             explicacao: melhorFato.explicacao,
-            score: confidence,
+            score: confidence
         };
     }
-
     return { encontrou: false };
 }
 
-// =================================================================
-// 11. ANÁLISE COM IA DA DEEPSEEK (API)
-// =================================================================
-
-// ⚠️ ATENÇÃO: Substitua esta chave pela sua nova chave
-// Se for usar no Vercel, use process.env.DEEPSEEK_API_KEY
-const DEEPSEEK_API_KEY = 'sk-0c9bf1c239e54b52b2f4a95b65cb9cb2';
-
-async function analisarComDeepSeek(texto) {
-    try {
-        exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, 'Processando com DeepSeek...', 0, 'suspeita');
-
-        const resposta = await fetch('https://api.deepseek.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: 'deepseek-chat',
-                messages: [
-                    {
-                        role: 'system',
-                        content: `Você é um verificador de fatos especializado. Analise a notícia fornecida e responda APENAS com um objeto JSON no formato:
-{
-    "classificacao": "verdadeira" ou "fake" ou "suspeita",
-    "score": 0 a 100,
-    "explicacao": "Texto explicativo em português com até 200 caracteres"
-}
-Seja rigoroso. Notícias sem fontes confiáveis ou com indícios de desinformação devem ser classificadas como "fake" ou "suspeita".`
-                    },
-                    {
-                        role: 'user',
-                        content: texto
-                    }
-                ],
-                temperature: 0.3,
-                max_tokens: 300
-            })
-        });
-
-        if (!resposta.ok) {
-            console.warn('⚠️ DeepSeek API erro:', resposta.status);
-            return { encontrou: false };
-        }
-
-        const dados = await resposta.json();
-        const conteudo = dados.choices[0].message.content;
-        console.log('🧠 DeepSeek respondeu:', conteudo);
-
-        let json;
-        try {
-            const match = conteudo.match(/\{[\s\S]*\}/);
-            if (match) {
-                json = JSON.parse(match[0]);
-            } else {
-                json = JSON.parse(conteudo);
-            }
-        } catch (e) {
-            console.warn('⚠️ Falha ao parsear JSON, usando fallback:', e);
-            const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
-                                 conteudo.includes('fake') || conteudo.includes('falso') ? 'fake' : 'suspeita';
-            return {
-                encontrou: true,
-                classificacao: classificacao,
-                explicacao: conteudo.substring(0, 300),
-                score: 70
-            };
-        }
-
-        return {
-            encontrou: true,
-            classificacao: json.classificacao || 'suspeita',
-            explicacao: json.explicacao || 'Análise concluída.',
-            score: json.score || 70
-        };
-
-    } catch (erro) {
-        console.error('❌ Erro na DeepSeek API:', erro.message);
-        return { encontrou: false };
-    }
-}
-
-// =================================================================
-// 12. ANÁLISE LOCAL (FALLBACK)
-// =================================================================
-
-function analisarLocalComScore(texto, scoreFinal) {
-    var classificacao = 'suspeita';
-    var icone = '⚠️';
-    var titulo = 'Suspeita';
-    var cor = '#a16207';
-    if (scoreFinal >= 70) {
-        classificacao = 'verdadeira';
-        icone = '✅';
-        titulo = 'Verdadeira';
-        cor = '#166534';
-    } else if (scoreFinal <= 30) {
-        classificacao = 'fake';
-        icone = '❌';
-        titulo = 'Falsa';
-        cor = '#991b1b';
-    }
-
-    var textoLower = texto.toLowerCase();
-    var palavrasSuspeitas = [];
-    var palavrasConfiaveis = [];
-    for (var i = 0; i < PALAVRAS_FAKE.length; i++) {
-        if (textoLower.indexOf(PALAVRAS_FAKE[i].palavra) !== -1) {
-            palavrasSuspeitas.push(PALAVRAS_FAKE[i].palavra);
-        }
-    }
-    for (var j = 0; j < PALAVRAS_CONFIAVEIS.length; j++) {
-        if (textoLower.indexOf(PALAVRAS_CONFIAVEIS[j].palavra) !== -1) {
-            palavrasConfiaveis.push(PALAVRAS_CONFIAVEIS[j].palavra);
-        }
-    }
-
-    var motivo = '';
-    if (classificacao === 'fake') {
-        motivo = '🔍 Palavras suspeitas: ' + (palavrasSuspeitas.slice(0,6).join(', ') || 'nenhuma específica') + '.<br>';
-        motivo += '💡 Não compartilhe! Verifique em sites oficiais.';
-    } else if (classificacao === 'verdadeira') {
-        motivo = '✅ Palavras confiáveis: ' + (palavrasConfiaveis.slice(0,6).join(', ') || 'termos genéricos') + '.<br>';
-        motivo += '💡 Pode confiar, mas sempre confira a data e o contexto.';
-    } else {
-        motivo = '🔎 Análise inconclusiva.<br>';
-        if (palavrasSuspeitas.length && palavrasConfiaveis.length) {
-            motivo += '⚠️ Conflito entre suspeitas (' + palavrasSuspeitas.slice(0,4).join(', ') + ') e confiáveis (' + palavrasConfiaveis.slice(0,4).join(', ') + ').<br>';
-        } else if (palavrasSuspeitas.length) {
-            motivo += '⚠️ Palavras suspeitas: ' + palavrasSuspeitas.slice(0,5).join(', ') + '.<br>';
-        } else if (palavrasConfiaveis.length) {
-            motivo += 'ℹ️ Palavras confiáveis: ' + palavrasConfiaveis.slice(0,5).join(', ') + '.<br>';
-        } else {
-            motivo += '📌 Nenhuma palavra-chave forte.<br>';
-        }
-        motivo += '💡 Pesquise em fontes oficiais antes de compartilhar.';
-    }
-
-    sistema.analisadas++;
-    sistema.ultimaAnalise = Date.now();
-    if (classificacao === 'fake') { sistema.fake++; sistema.pontos += 15; }
-    else if (classificacao === 'verdadeira') { sistema.verdadeiras++; sistema.pontos += 10; }
-    else { sistema.suspeitas++; sistema.pontos += 5; }
-
-    exibirResultado(icone, titulo, cor, texto, motivo, scoreFinal, classificacao);
-    adicionarAoHistorico(texto, classificacao, motivo, scoreFinal);
-
-    if (classificacao === 'fake') { enviarParaMicrobit('F'); mudarCorSphero('#dc2626'); piscarLEDs('vermelho'); }
-    else if (classificacao === 'verdadeira') { enviarParaMicrobit('V'); mudarCorSphero('#16a34a'); piscarLEDs('verde'); }
-    else { enviarParaMicrobit('S'); mudarCorSphero('#eab308'); piscarLEDs('amarelo'); }
-
-    atualizarDashboard();
-    salvarDados();
-    if (DOM.textoNoticia) DOM.textoNoticia.value = '';
-}
-
 // ================================================================
-// DEEPSEEK V4 FLASH — VIA API DIRETA COM CORS PROXY
+// ANÁLISE COM IA DEEPSEEK (VIA CORS PROXY)
 // ================================================================
 
 const DEEPSEEK_API_KEY = 'sk-0c9bf1c239e54b52b2f4a95b65cb9cb2';
@@ -643,28 +435,25 @@ async function analisarComDeepSeek(texto) {
     try {
         exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, 'Processando...', 0, 'suspeita');
 
-        // Usa um CORS proxy gratuito (não precisa de cadastro)
+        // CORS proxy gratuito
         const proxyUrl = 'https://corsproxy.io/?';
         const apiUrl = 'https://api.deepseek.com/v1/chat/completions';
 
         const resposta = await fetch(proxyUrl + encodeURIComponent(apiUrl), {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+                'Authorization': 'Bearer ' + DEEPSEEK_API_KEY,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 model: 'deepseek-chat',
-                messages: [
-                    {
-                        role: 'system',
-                        content: `Você é um verificador de fatos. Analise a notícia e responda APENAS com JSON: {"classificacao": "verdadeira/fake/suspeita", "score": 0-100, "explicacao": "texto em português"}`
-                    },
-                    {
-                        role: 'user',
-                        content: texto
-                    }
-                ],
+                messages: [{
+                    role: 'system',
+                    content: 'Você é um verificador de fatos. Analise a notícia e responda APENAS com JSON: {"classificacao": "verdadeira/fake/suspeita", "score": 0-100, "explicacao": "texto em português"}'
+                }, {
+                    role: 'user',
+                    content: texto
+                }],
                 temperature: 0.3,
                 max_tokens: 300
             })
@@ -675,21 +464,17 @@ async function analisarComDeepSeek(texto) {
             return { encontrou: false };
         }
 
-        const dados = await resposta.json();
-        const conteudo = dados.choices[0].message.content;
+        var dados = await resposta.json();
+        var conteudo = dados.choices[0].message.content;
         console.log('🧠 DeepSeek respondeu:', conteudo);
 
-        let json;
+        var json;
         try {
-            const match = conteudo.match(/\{[\s\S]*\}/);
-            if (match) {
-                json = JSON.parse(match[0]);
-            } else {
-                json = JSON.parse(conteudo);
-            }
+            var match = conteudo.match(/\{[\s\S]*\}/);
+            json = JSON.parse(match ? match[0] : conteudo);
         } catch (e) {
-            const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
-                                 conteudo.includes('fake') || conteudo.includes('falso') ? 'fake' : 'suspeita';
+            var classificacao = conteudo.indexOf('verdade') !== -1 ? 'verdadeira' :
+                (conteudo.indexOf('fake') !== -1 || conteudo.indexOf('falso') !== -1) ? 'fake' : 'suspeita';
             return {
                 encontrou: true,
                 classificacao: classificacao,
@@ -711,9 +496,163 @@ async function analisarComDeepSeek(texto) {
     }
 }
 
-// =================================================================
-// 14. JOGO — MISSÃO DOS SENTINELAS
-// =================================================================
+function analisarLocalComScore(texto, scoreFinal) {
+    var classificacao = 'suspeita',
+        icone = '⚠️',
+        titulo = 'Suspeita',
+        cor = '#a16207';
+    if (scoreFinal >= 70) { classificacao = 'verdadeira';
+        icone = '✅';
+        titulo = 'Verdadeira';
+        cor = '#166534'; } else if (scoreFinal <= 30) { classificacao = 'fake';
+        icone = '❌';
+        titulo = 'Falsa';
+        cor = '#991b1b'; }
+
+    var textoLower = texto.toLowerCase();
+    var palavrasSuspeitas = [],
+        palavrasConfiaveis = [];
+    for (var i = 0; i < PALAVRAS_FAKE.length; i++) {
+        if (textoLower.indexOf(PALAVRAS_FAKE[i].palavra) !== -1) palavrasSuspeitas.push(PALAVRAS_FAKE[i].palavra);
+    }
+    for (var j = 0; j < PALAVRAS_CONFIAVEIS.length; j++) {
+        if (textoLower.indexOf(PALAVRAS_CONFIAVEIS[j].palavra) !== -1) palavrasConfiaveis.push(PALAVRAS_CONFIAVEIS[j].palavra);
+    }
+
+    var motivo = '';
+    if (classificacao === 'fake') {
+        motivo = '🔍 Palavras suspeitas: ' + (palavrasSuspeitas.slice(0, 6).join(', ') || 'nenhuma específica') + '.<br>';
+        motivo += '💡 Não compartilhe! Verifique em sites oficiais.';
+    } else if (classificacao === 'verdadeira') {
+        motivo = '✅ Palavras confiáveis: ' + (palavrasConfiaveis.slice(0, 6).join(', ') || 'termos genéricos') + '.<br>';
+        motivo += '💡 Pode confiar, mas sempre confira a data e o contexto.';
+    } else {
+        motivo = '🔎 Análise inconclusiva.<br>';
+        if (palavrasSuspeitas.length && palavrasConfiaveis.length) {
+            motivo += '⚠️ Conflito entre suspeitas (' + palavrasSuspeitas.slice(0, 4).join(', ') + ') e confiáveis (' + palavrasConfiaveis.slice(0, 4).join(', ') + ').<br>';
+        } else if (palavrasSuspeitas.length) {
+            motivo += '⚠️ Palavras suspeitas: ' + palavrasSuspeitas.slice(0, 5).join(', ') + '.<br>';
+        } else if (palavrasConfiaveis.length) {
+            motivo += 'ℹ️ Palavras confiáveis: ' + palavrasConfiaveis.slice(0, 5).join(', ') + '.<br>';
+        } else {
+            motivo += '📌 Nenhuma palavra-chave forte.<br>';
+        }
+        motivo += '💡 Pesquise em fontes oficiais antes de compartilhar.';
+    }
+
+    sistema.analisadas++;
+    sistema.ultimaAnalise = Date.now();
+    if (classificacao === 'fake') { sistema.fake++;
+        sistema.pontos += 15; } else if (classificacao === 'verdadeira') { sistema.verdadeiras++;
+        sistema.pontos += 10; } else { sistema.suspeitas++;
+        sistema.pontos += 5; }
+
+    exibirResultado(icone, titulo, cor, texto, motivo, scoreFinal, classificacao);
+    adicionarAoHistorico(texto, classificacao, motivo, scoreFinal);
+    atualizarDashboard();
+    salvarDados();
+    if (DOM.textoNoticia) DOM.textoNoticia.value = '';
+}
+
+// ================================================================
+// FUNÇÃO PRINCIPAL DE ANÁLISE (IA + FALLBACK)
+// ================================================================
+
+async function analisarNoticia() {
+    if (!DOM.textoNoticia) return;
+    var texto = DOM.textoNoticia.value.trim();
+    if (!texto) {
+        exibirResultadoErro('⚠️ Digite uma informação para verificar.');
+        return;
+    }
+
+    // ---- TENTAR IA DEEPSEEK ----
+    var resultadoIA = await analisarComDeepSeek(texto);
+    if (resultadoIA && resultadoIA.encontrou) {
+        var icone = resultadoIA.classificacao === 'verdadeira' ? '✅' :
+            resultadoIA.classificacao === 'fake' ? '❌' : '⚠️';
+        var titulo = resultadoIA.classificacao === 'verdadeira' ? 'Verdadeira' :
+            resultadoIA.classificacao === 'fake' ? 'Falsa' : 'Suspeita';
+        var cor = resultadoIA.classificacao === 'verdadeira' ? '#166534' :
+            resultadoIA.classificacao === 'fake' ? '#991b1b' : '#a16207';
+        exibirResultado(icone, titulo, cor, texto, resultadoIA.explicacao, resultadoIA.score, resultadoIA.classificacao);
+        sistema.analisadas++;
+        sistema.ultimaAnalise = Date.now();
+        if (resultadoIA.classificacao === 'fake') { sistema.fake++;
+            sistema.pontos += 15; } else if (resultadoIA.classificacao === 'verdadeira') { sistema.verdadeiras++;
+            sistema.pontos += 10; } else { sistema.suspeitas++;
+            sistema.pontos += 5; }
+        adicionarAoHistorico(texto, resultadoIA.classificacao, resultadoIA.explicacao, resultadoIA.score);
+        atualizarDashboard();
+        salvarDados();
+        DOM.textoNoticia.value = '';
+        return;
+    }
+
+    // ---- FATOS DE EMERGÊNCIA ----
+    var fatosEmergencia = [
+        { pergunta: 'vacinas causam autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento. Fonte: OMS.' },
+        { pergunta: 'vacina causa autismo', resposta: 'fake', explicacao: '❌ Falso! Estudo fraudulento. Fonte: OMS.' },
+        { pergunta: 'a terra é plana', resposta: 'fake', explicacao: '❌ Falso! Terra é esferoide.' },
+        { pergunta: 'cloroquina cura covid', resposta: 'fake', explicacao: '❌ Falso! Estudos mostraram ineficácia.' },
+        { pergunta: 'o sol é uma estrela', resposta: 'verdadeira', explicacao: '✅ Verdadeiro! Sol é uma estrela.' },
+        { pergunta: 'a lua tem luz própria', resposta: 'fake', explicacao: '❌ Falso! Lua reflete luz do Sol.' }
+    ];
+
+    var textoLower = texto.toLowerCase();
+    for (var f = 0; f < fatosEmergencia.length; f++) {
+        var fato = fatosEmergencia[f];
+        if (textoLower.indexOf(fato.pergunta) !== -1) {
+            var icone2 = fato.resposta === 'verdadeira' ? '✅' : '❌';
+            var titulo2 = fato.resposta === 'verdadeira' ? 'Verdadeira' : 'Falsa';
+            var cor2 = fato.resposta === 'verdadeira' ? '#166534' : '#991b1b';
+            exibirResultado(icone2, titulo2, cor2, texto, fato.explicacao, 95, fato.resposta);
+            sistema.analisadas++;
+            sistema.ultimaAnalise = Date.now();
+            if (fato.resposta === 'fake') { sistema.fake++;
+                sistema.pontos += 15; } else { sistema.verdadeiras++;
+                sistema.pontos += 10; }
+            adicionarAoHistorico(texto, fato.resposta, fato.explicacao, 95);
+            atualizarDashboard();
+            salvarDados();
+            DOM.textoNoticia.value = '';
+            return;
+        }
+    }
+
+    // ---- FALLBACK BASE LOCAL ----
+    var temPortugues = /[áàâãéèêíïóôõúç]/i.test(texto);
+    var textoBusca = temPortugues ? await traduzirParaIngles(texto) : texto;
+    var resultadoBase = verificarBaseConhecimento(textoBusca);
+    if (resultadoBase.encontrou) {
+        var icone3 = resultadoBase.classificacao === 'verdadeira' ? '✅' :
+            resultadoBase.classificacao === 'fake' ? '❌' : '⚠️';
+        var titulo3 = resultadoBase.classificacao === 'verdadeira' ? 'Verdadeira' :
+            resultadoBase.classificacao === 'fake' ? 'Falsa' : 'Suspeita';
+        var cor3 = resultadoBase.classificacao === 'verdadeira' ? '#166534' :
+            resultadoBase.classificacao === 'fake' ? '#991b1b' : '#a16207';
+        exibirResultado(icone3, titulo3, cor3, texto, resultadoBase.explicacao, resultadoBase.score, resultadoBase.classificacao);
+        sistema.analisadas++;
+        sistema.ultimaAnalise = Date.now();
+        if (resultadoBase.classificacao === 'fake') { sistema.fake++;
+            sistema.pontos += 15; } else if (resultadoBase.classificacao === 'verdadeira') { sistema.verdadeiras++;
+            sistema.pontos += 10; } else { sistema.suspeitas++;
+            sistema.pontos += 5; }
+        adicionarAoHistorico(texto, resultadoBase.classificacao, resultadoBase.explicacao, resultadoBase.score);
+        atualizarDashboard();
+        salvarDados();
+        DOM.textoNoticia.value = '';
+        return;
+    }
+
+    // ---- FALLBACK LOCAL (palavras) ----
+    var scoreLocal = calcularScoreLocal(texto);
+    analisarLocalComScore(texto, scoreLocal);
+}
+
+// ================================================================
+// JOGO — MISSÃO DOS SENTINELAS
+// ================================================================
 
 var perguntaAtual = null;
 
@@ -725,10 +664,7 @@ function novaMissao() {
 }
 
 function responderMissao(resposta) {
-    if (!perguntaAtual) {
-        alert('Clique em "Nova Missão" primeiro!');
-        return;
-    }
+    if (!perguntaAtual) { alert('Clique em "Nova Missão" primeiro!'); return; }
     var acertou = resposta === perguntaAtual.resposta;
     var fb = DOM.feedbackMissao;
     if (!fb) return;
@@ -753,22 +689,20 @@ function responderMissao(resposta) {
     setTimeout(novaMissao, 3000);
 }
 
-// =================================================================
-// 15. ROBÓTICA (CONEXÃO REAL ATIVADA)
-// =================================================================
+// ================================================================
+// ROBÓTICA (SIMULAÇÃO)
+// ================================================================
 
-const USAR_DISPOSITIVOS_REAIS = true;
-
-// ---- MAKEY MAKEY ----
+// Makey Makey
 document.addEventListener('keydown', function(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    const tecla = e.key.toLowerCase();
-    const mapa = { 'a': 'btnVerdade', 's': 'btnSuspeita', 'd': 'btnFake', 'n': 'novaMissao' };
+    var tecla = e.key.toLowerCase();
+    var mapa = { 'a': 'btnVerdade', 's': 'btnSuspeita', 'd': 'btnFake', 'n': 'novaMissao' };
     if (mapa[tecla]) {
-        const btn = document.getElementById(mapa[tecla]);
+        var btn = document.getElementById(mapa[tecla]);
         if (btn) {
             btn.style.transform = 'scale(0.9)';
-            setTimeout(() => btn.style.transform = '', 200);
+            setTimeout(function() { btn.style.transform = ''; }, 200);
         }
     }
     if (tecla === 'a') responderMissao('verdadeira');
@@ -777,213 +711,79 @@ document.addEventListener('keydown', function(e) {
     else if (tecla === 'n') novaMissao();
 });
 
-// ---- MICRO:BIT ----
-let microConectado = false;
-let microbitDevice = null;
+// Micro:bit (simulação)
+var microConectado = false;
+if (DOM.conectarMicro) {
+    DOM.conectarMicro.addEventListener('click', function() {
+        microConectado = !microConectado;
+        if (DOM.statusMicro) DOM.statusMicro.textContent = microConectado ? '🟢 Conectado (Simulação)' : '🔴 Desconectado (Simulação)';
+        this.textContent = microConectado ? 'Desconectar (Simulação)' : 'Conectar (Simulação)';
+    });
+}
 
-function simularMicrobit(comando) {
-    const mapa = { F: '🚨 FAKE', V: '✅ VERDADE', S: '⚠️ SUSPEITA' };
+function enviarParaMicrobit(comando) {
+    if (!microConectado) return;
+    var mapa = { F: '🚨 FAKE', V: '✅ VERDADE', S: '⚠️ SUSPEITA' };
     if (DOM.comandoMicro) DOM.comandoMicro.textContent = 'Último comando: ' + (mapa[comando] || comando);
 }
 
-function simularPiscarLEDs(cor) {
-    const leds = document.querySelectorAll('.led');
-    const classe = cor === 'vermelho' ? 'aceso' : cor === 'verde' ? 'aceso-verde' : 'aceso-amarelo';
-    leds.forEach(l => l.className = 'led');
-    leds.forEach(l => l.classList.add(classe));
-    setTimeout(() => leds.forEach(l => l.className = 'led'), 1500);
-}
-
-async function conectarMicrobitReal() {
-    try {
-        if (typeof MicrobitConnection === 'undefined') {
-            throw new Error('Biblioteca Micro:bit não carregada. Usando simulação.');
-        }
-        const { createBluetoothConnection } = MicrobitConnection;
-        const connection = createBluetoothConnection();
-        await connection.connect();
-        microbitDevice = connection;
-        microConectado = true;
-        DOM.statusMicro.textContent = '🟢 Conectado!';
-        DOM.conectarMicro.textContent = 'Desconectar';
-        console.log('✅ Micro:bit conectado!');
-    } catch (error) {
-        console.warn('⚠️ Micro:bit real falhou, usando simulação:', error.message);
-        microConectado = false;
-        DOM.statusMicro.textContent = '🔴 Usando simulação';
-    }
-}
-
-function desconectarMicrobitReal() {
-    if (microbitDevice) {
-        microbitDevice.disconnect();
-        microbitDevice = null;
-        microConectado = false;
-        DOM.statusMicro.textContent = '🔴 Desconectado';
-        DOM.conectarMicro.textContent = 'Conectar';
-    }
-}
-
-async function enviarParaMicrobitReal(comando) {
-    if (!microConectado || !microbitDevice) return simularMicrobit(comando);
-    try {
-        const icones = { 'F': '❌', 'V': '✅', 'S': '⚠️' };
-        await microbitDevice.write('uart', icones[comando] || '?');
-        DOM.comandoMicro.textContent = 'Último comando: ' + comando;
-    } catch (error) {
-        console.warn('⚠️ Erro ao enviar comando, usando simulação:', error.message);
-        simularMicrobit(comando);
-    }
-}
-
-async function piscarLEDsReal(cor) {
-    if (!microConectado || !microbitDevice) return simularPiscarLEDs(cor);
-    try {
-        if (cor === 'verde') await microbitDevice.write('display', 'tick');
-        else if (cor === 'vermelho') await microbitDevice.write('display', 'cross');
-        else if (cor === 'amarelo') await microbitDevice.write('display', 'question_mark');
-    } catch (error) {
-        console.warn('⚠️ Erro ao piscar LEDs, usando simulação:', error.message);
-        simularPiscarLEDs(cor);
-    }
-}
-
-const enviarParaMicrobit = USAR_DISPOSITIVOS_REAIS ? enviarParaMicrobitReal : simularMicrobit;
-const piscarLEDs = USAR_DISPOSITIVOS_REAIS ? piscarLEDsReal : simularPiscarLEDs;
-
-if (DOM.conectarMicro) {
-    DOM.conectarMicro.addEventListener('click', async function() {
-        if (USAR_DISPOSITIVOS_REAIS) {
-            if (microConectado) {
-                desconectarMicrobitReal();
-            } else {
-                await conectarMicrobitReal();
-            }
-        } else {
-            microConectado = !microConectado;
-            DOM.statusMicro.textContent = microConectado ? '🟢 Conectado (Simulação)' : '🔴 Desconectado (Simulação)';
-            this.textContent = microConectado ? 'Desconectar (Simulação)' : 'Conectar (Simulação)';
-        }
-    });
+function piscarLEDs(cor) {
+    var leds = document.querySelectorAll('.led');
+    var classe = cor === 'vermelho' ? 'aceso' : cor === 'verde' ? 'aceso-verde' : 'aceso-amarelo';
+    leds.forEach(function(l) { l.className = 'led'; });
+    leds.forEach(function(l) { l.classList.add(classe); });
+    setTimeout(function() { leds.forEach(function(l) { l.className = 'led'; }); }, 1500);
 }
 
 if (DOM.btnTestarMicro) {
-    DOM.btnTestarMicro.addEventListener('click', async function() {
+    DOM.btnTestarMicro.addEventListener('click', function() {
         if (!microConectado) { alert('Conecte o Micro:bit primeiro!'); return; }
-        await piscarLEDs('verde');
-        setTimeout(() => piscarLEDs('amarelo'), 800);
-        setTimeout(() => piscarLEDs('vermelho'), 1600);
+        piscarLEDs('verde');
+        setTimeout(function() { piscarLEDs('amarelo'); }, 800);
+        setTimeout(function() { piscarLEDs('vermelho'); }, 1600);
     });
 }
 
-// ---- SPHERO ----
-let spheroConectado = false;
-let spheroDevice = null;
-let spheroX = 0, spheroY = 0;
+// Sphero (simulação)
+var spheroConectado = false;
+var spheroX = 0,
+    spheroY = 0;
+if (DOM.conectarSphero) {
+    DOM.conectarSphero.addEventListener('click', function() {
+        spheroConectado = !spheroConectado;
+        if (DOM.statusSphero) DOM.statusSphero.textContent = spheroConectado ? '🟢 Conectado (Simulação)' : '🔴 Desconectado (Simulação)';
+        this.textContent = spheroConectado ? 'Desconectar (Simulação)' : 'Conectar (Simulação)';
+        if (!spheroConectado) {
+            spheroX = 0;
+            spheroY = 0;
+            var sim = document.getElementById('spheroSim');
+            if (sim) sim.style.transform = 'translate(0,0)';
+        }
+    });
+}
 
-function simularMoverSphero(dir) {
-    const passo = 25;
+function moverSphero(dir) {
+    if (!spheroConectado) { alert('Conecte o Sphero!'); return; }
+    var passo = 25;
     if (dir === 'frente') spheroY -= passo;
     else if (dir === 'tras') spheroY += passo;
     else if (dir === 'esquerda') spheroX -= passo;
     else if (dir === 'direita') spheroX += passo;
-    const sim = document.getElementById('spheroSim');
-    if (sim) sim.style.transform = `translate(${spheroX}px, ${spheroY}px)`;
+    var sim = document.getElementById('spheroSim');
+    if (sim) sim.style.transform = 'translate(' + spheroX + 'px, ' + spheroY + 'px)';
 }
 
-function simularMudarCorSphero(cor) {
-    const el = document.getElementById('spheroSim');
+function mudarCorSphero(cor) {
+    if (!spheroConectado) return;
+    var el = document.getElementById('spheroSim');
     if (!el) return;
     el.style.background = cor;
-    setTimeout(() => { if (!spheroConectado) el.style.background = '#2563eb'; }, 2000);
+    setTimeout(function() { if (spheroConectado) el.style.background = '#2563eb'; }, 2000);
 }
 
-async function conectarSpheroReal() {
-    try {
-        if (typeof spheron === 'undefined') {
-            throw new Error('Biblioteca Spheron não carregada. Usando simulação.');
-        }
-        const device = await spheron.scan();
-        await device.connect();
-        spheroDevice = device;
-        spheroConectado = true;
-        DOM.statusSphero.textContent = '🟢 Conectado!';
-        DOM.conectarSphero.textContent = 'Desconectar';
-        console.log('✅ Sphero conectado!');
-    } catch (error) {
-        console.warn('⚠️ Sphero real falhou, usando simulação:', error.message);
-        spheroConectado = false;
-        DOM.statusSphero.textContent = '🔴 Usando simulação';
-    }
-}
-
-function desconectarSpheroReal() {
-    if (spheroDevice) {
-        spheroDevice.disconnect();
-        spheroDevice = null;
-        spheroConectado = false;
-        DOM.statusSphero.textContent = '🔴 Desconectado';
-        DOM.conectarSphero.textContent = 'Conectar';
-    }
-}
-
-function moverSpheroReal(dir) {
-    if (!spheroConectado || !spheroDevice) {
-        simularMoverSphero(dir);
-        return;
-    }
-    try {
-        const comandos = {
-            'frente': { speed: 50, heading: 0 },
-            'tras': { speed: 50, heading: 180 },
-            'esquerda': { speed: 50, heading: 270 },
-            'direita': { speed: 50, heading: 90 }
-        };
-        const cmd = comandos[dir];
-        if (cmd) spheroDevice.roll(cmd.speed, cmd.heading);
-    } catch (error) {
-        console.warn('⚠️ Erro ao mover Sphero, usando simulação:', error.message);
-        simularMoverSphero(dir);
-    }
-}
-
-function mudarCorSpheroReal(cor) {
-    if (!spheroConectado || !spheroDevice) return simularMudarCorSphero(cor);
-    try {
-        spheroDevice.setColor(cor);
-    } catch (error) {
-        console.warn('⚠️ Erro ao mudar cor do Sphero, usando simulação:', error.message);
-        simularMudarCorSphero(cor);
-    }
-}
-
-const moverSphero = USAR_DISPOSITIVOS_REAIS ? moverSpheroReal : simularMoverSphero;
-const mudarCorSphero = USAR_DISPOSITIVOS_REAIS ? mudarCorSpheroReal : simularMudarCorSphero;
-
-if (DOM.conectarSphero) {
-    DOM.conectarSphero.addEventListener('click', async function() {
-        if (USAR_DISPOSITIVOS_REAIS) {
-            if (spheroConectado) {
-                desconectarSpheroReal();
-            } else {
-                await conectarSpheroReal();
-            }
-        } else {
-            spheroConectado = !spheroConectado;
-            DOM.statusSphero.textContent = spheroConectado ? '🟢 Conectado (Simulação)' : '🔴 Desconectado (Simulação)';
-            this.textContent = spheroConectado ? 'Desconectar (Simulação)' : 'Conectar (Simulação)';
-            if (!spheroConectado) {
-                spheroX = 0; spheroY = 0;
-                const sim = document.getElementById('spheroSim');
-                if (sim) sim.style.transform = 'translate(0,0)';
-            }
-        }
-    });
-}
-
-// =================================================================
-// 17. EVENTOS E INICIALIZAÇÃO
-// =================================================================
+// ================================================================
+// EVENTOS E INICIALIZAÇÃO
+// ================================================================
 
 if (DOM.btnAnalisar) {
     DOM.btnAnalisar.addEventListener('click', analisarNoticia);
@@ -1055,10 +855,7 @@ if (DOM.btnModoEscuro) {
 if (DOM.btnExportarDados) DOM.btnExportarDados.addEventListener('click', exportarDados);
 if (DOM.btnResetarDados) DOM.btnResetarDados.addEventListener('click', resetarDados);
 
-// =================================================================
-// 18. INICIALIZAÇÃO
-// =================================================================
-
+// ---- INICIALIZAÇÃO ----
 var temaSalvo = localStorage.getItem('sentinelaTema') || 'escuro';
 document.documentElement.setAttribute('data-tema', temaSalvo);
 if (DOM.btnModoEscuro) DOM.btnModoEscuro.textContent = temaSalvo === 'escuro' ? '🌙' : '☀️';
@@ -1067,7 +864,6 @@ carregarDados();
 novaMissao();
 setInterval(salvarDados, CONFIG.AUTO_SAVE_INTERVAL);
 
-console.log('🛡️ Sentinela da Verdade v9.0 carregado!');
+console.log('🛡️ Sentinela da Verdade v10.0 carregado!');
 console.log('📚 Base:', BASE_CONHECIMENTO.length, 'fatos.');
-console.log('🔑 API Key:', CONFIG.API_KEY ? '✅ Configurada' : '❌ Não configurada');
-console.log('✅ Fim do script');
+console.log('🔑 DeepSeek: ✅ Configurada');
