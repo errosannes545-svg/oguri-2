@@ -415,7 +415,7 @@ const GROQ_API_KEY = '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';
 async function analisarComIA(texto) {
     const modelos = [
         'llama-3.3-70b-versatile',   // Modelo atual da Groq
-        'llama-3.1-8b-instant',     // Modelo antigo
+        'llama-3.2-8b-instant',     // Modelo antigo
         'llama3-70b-8192',          // Modelo mais antigo
         'mixtral-8x7b-32768',       // Modelo Mixtral
         'gemma2-9b-it'              // Modelo Gemma
