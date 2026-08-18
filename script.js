@@ -408,15 +408,14 @@ function verificarBaseConhecimento(texto) {
 
 async function analisarComIA(texto) {
     const GROQ_API_KEY = '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';
-    
-    // Modelos preferidos (testados e funcionais na tua conta)
+
+    // Modelos preferidos (mais atuais e confiáveis)
     const modelosPreferidos = [
-        'groq/compound-mini',
-        'openai/gpt-oss-20b',
-        'qwen/qwen3.6-27b'
+        'qwen/qwen3.6-27b',           // Modelo Qwen 27B (mais atual)
+        'openai/gpt-oss-20b',         // Modelo OpenAI OSS 20B
+        'groq/compound-mini'          // Último recurso
     ];
 
-    // Tenta modelos preferidos primeiro
     for (const modelo of modelosPreferidos) {
         try {
             exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, `Usando ${modelo}...`, 0, 'suspeita');
@@ -432,19 +431,19 @@ async function analisarComIA(texto) {
                     messages: [
                         {
                             role: 'system',
-                            content: `Você é um verificador de fatos. Analise a afirmação e classifique como "verdadeira", "fake" ou "suspeita". Responda APENAS com um JSON no formato: {"classificacao":"verdadeira|fake|suspeita", "score":0-100, "explicacao":"texto curto em português"}`
+                            content: `Hoje é 17/08/2026. Você é um verificador de fatos. Analise a afirmação do usuário e classifique como "verdadeira", "fake" ou "suspeita". Considere apenas eventos até hoje. Se for sobre evento futuro incerto, classifique como "suspeita". Responda APENAS com JSON: {"classificacao":"verdadeira|fake|suspeita", "score":0-100, "explicacao":"texto curto em português"}`
                         },
                         { role: 'user', content: texto }
                     ],
                     temperature: 0.2,
-                    max_tokens: 300
+                    max_tokens: 200
                 })
             });
 
             const dados = await resposta.json();
             if (!resposta.ok) {
                 console.warn(`⚠️ ${modelo} falhou:`, dados.error?.message);
-                continue; // tenta o próximo modelo
+                continue;
             }
 
             const conteudo = dados.choices?.[0]?.message?.content || '';
@@ -453,7 +452,6 @@ async function analisarComIA(texto) {
                 const match = conteudo.match(/\{[\s\S]*\}/);
                 json = JSON.parse(match ? match[0] : conteudo);
             } catch (e) {
-                // Se não veio JSON, interpreta texto simples
                 const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
                     (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
                 return {
@@ -476,45 +474,15 @@ async function analisarComIA(texto) {
         }
     }
 
-    // Se nenhum modelo preferido funcionou, tenta Google Fact Check Tools
-    try {
-        exibirResultado('🧠', 'Consultando Google Fact Check...', '#2563eb', texto, 'Verificando base...', 0, 'suspeita');
-        const url = `https://factchecktools.googleapis.com/v1alpha1/claims:search?query=${encodeURIComponent(texto)}&key=${CONFIG.API_KEY}`;
-        const respostaGoogle = await fetch(url);
-        const dadosGoogle = await respostaGoogle.json();
-
-        if (respostaGoogle.ok && dadosGoogle.claims && dadosGoogle.claims.length > 0) {
-            const claim = dadosGoogle.claims[0];
-            const review = claim.claimReview?.[0];
-            const rating = review?.textualRating || '';
-            const publisher = review?.publisher?.name || 'Agência de fact-checking';
-
-            let classificacao = 'suspeita';
-            let score = 70;
-            if (/false|falso|mentira|fake|enganoso|incorreto|impreciso/i.test(rating)) {
-                classificacao = 'fake';
-                score = 90;
-            } else if (/true|verdade|correto|verdadeiro|real|preciso/i.test(rating)) {
-                classificacao = 'verdadeira';
-                score = 95;
-            }
-
-            const explicacao = `🔍 ${claim.text || 'Alegação verificada'} — ${rating} (${publisher})`;
-            return { encontrou: true, classificacao, explicacao, score };
-        }
-    } catch (e) {
-        console.warn('⚠️ Google Fact Check falhou:', e.message);
-    }
-
-    // Fallback final: não retorna suspeita vazia, faz análise local com melhor explicação
+    // Fallback local
     const scoreLocal = calcularScoreLocal(texto);
     let classificacaoLocal = 'suspeita';
     if (scoreLocal < 40) classificacaoLocal = 'fake';
     else if (scoreLocal >= 70) classificacaoLocal = 'verdadeira';
-    const explicacaoLocal = `Análise local (IA indisponível): ${scoreLocal}% de confiança. ` +
+    const explicacaoLocal = `Análise local: ${scoreLocal}% de confiança. ` +
         (classificacaoLocal === 'fake' ? 'Palavras suspeitas encontradas.' :
          classificacaoLocal === 'verdadeira' ? 'Fontes confiáveis detectadas.' :
-         'Sem fontes claras para afirmar.');
+         'Sem fontes claras.');
 
     return {
         encontrou: true,
