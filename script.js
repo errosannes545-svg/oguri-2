@@ -413,64 +413,107 @@ function verificarBaseConhecimento(texto) {
 const GROQ_API_KEY = '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';
 
 async function analisarComIA(texto) {
-    try {
-        exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, 'Processando...', 0, 'suspeita');
+    const modelos = [
+        'llama-3.3-70b-versatile',   // Modelo atual da Groq
+        'llama-3.1-8b-instant',     // Modelo antigo
+        'llama3-70b-8192',          // Modelo mais antigo
+        'mixtral-8x7b-32768',       // Modelo Mixtral
+        'gemma2-9b-it'              // Modelo Gemma
+    ];
 
-        const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Authorization': 'Bearer ' + GROQ_API_KEY,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: 'llama3-8b-8192',
-                messages: [
-                    {
-                        role: 'system',
-                        content: 'Classifique a notícia como verdadeira, fake ou suspeita. Responda apenas com JSON: {"classificacao":"...", "score":0, "explicacao":"..."}'
-                    },
-                    { role: 'user', content: texto }
-                ],
-                temperature: 0.3,
-                max_tokens: 200
-            })
-        });
-
-        const dados = await resposta.json();
-
-        if (!resposta.ok) {
-            console.error('❌ Erro Groq:', dados);
-            return { encontrou: false };
-        }
-
-        const conteudo = dados.choices?.[0]?.message?.content || '';
-
-        let json;
+    // Tenta cada modelo até um funcionar
+    for (const modelo of modelos) {
         try {
-            const match = conteudo.match(/\{[\s\S]*\}/);
-            json = JSON.parse(match ? match[0] : conteudo);
-        } catch (e) {
-            const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
-                (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
+            exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, `Tentando modelo ${modelo}...`, 0, 'suspeita');
+
+            const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + GROQ_API_KEY,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: modelo,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: 'Classifique a notícia como verdadeira, fake ou suspeita. Responda apenas com JSON: {"classificacao":"...", "score":0, "explicacao":"..."}'
+                        },
+                        { role: 'user', content: texto }
+                    ],
+                    temperature: 0.3,
+                    max_tokens: 200
+                })
+            });
+
+            const dados = await resposta.json();
+
+            if (!resposta.ok) {
+                console.warn(`⚠️ Modelo ${modelo} falhou:`, dados.error?.message || 'Erro desconhecido');
+                continue; // tenta o próximo modelo
+            }
+
+            const conteudo = dados.choices?.[0]?.message?.content || '';
+            let json;
+            try {
+                const match = conteudo.match(/\{[\s\S]*\}/);
+                json = JSON.parse(match ? match[0] : conteudo);
+            } catch (e) {
+                const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
+                    (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
+                return {
+                    encontrou: true,
+                    classificacao,
+                    explicacao: conteudo.substring(0, 300) || 'Análise concluída.',
+                    score: 70
+                };
+            }
+
             return {
                 encontrou: true,
-                classificacao,
-                explicacao: conteudo.substring(0, 300) || 'Análise concluída.',
-                score: 70
+                classificacao: json.classificacao || 'suspeita',
+                explicacao: json.explicacao || 'Análise concluída.',
+                score: json.score || 70
             };
+        } catch (erro) {
+            console.warn(`⚠️ Erro no modelo ${modelo}:`, erro.message);
+            continue;
         }
-
-        return {
-            encontrou: true,
-            classificacao: json.classificacao || 'suspeita',
-            explicacao: json.explicacao || 'Análise concluída.',
-            score: json.score || 70
-        };
-
-    } catch (erro) {
-        console.error('❌ Erro IA:', erro.message);
-        return { encontrou: false };
     }
+
+    // Se todos os modelos falharem, tenta Google Fact Check Tools (API real)
+    try {
+        exibirResultado('🧠', 'Consultando Google Fact Check...', '#2563eb', texto, 'Verificando base de fact-checking...', 0, 'suspeita');
+        const url = `https://factchecktools.googleapis.com/v1alpha1/claims:search?query=${encodeURIComponent(texto)}&key=${CONFIG.API_KEY}`;
+        const respostaGoogle = await fetch(url);
+        const dadosGoogle = await respostaGoogle.json();
+
+        if (respostaGoogle.ok && dadosGoogle.claims && dadosGoogle.claims.length > 0) {
+            const claim = dadosGoogle.claims[0];
+            const review = claim.claimReview?.[0];
+            const rating = review?.textualRating || '';
+            const publisher = review?.publisher?.name || 'Agência de fact-checking';
+            const urlFonte = review?.url || '';
+
+            let classificacao = 'suspeita';
+            let score = 70;
+            if (/false|falso|mentira|fake|enganoso|incorreto|impreciso/i.test(rating)) {
+                classificacao = 'fake';
+                score = 90;
+            } else if (/true|verdade|correto|verdadeiro|real|preciso/i.test(rating)) {
+                classificacao = 'verdadeira';
+                score = 95;
+            }
+
+            const explicacao = `🔍 ${claim.text || 'Alegação verificada'} — ${rating} (${publisher}) ${urlFonte ? 'Fonte: ' + urlFonte : ''}`;
+            return { encontrou: true, classificacao, explicacao, score };
+        }
+    } catch (e) {
+        console.warn('⚠️ Google Fact Check falhou:', e.message);
+    }
+
+    // Se tudo falhar, retorna falso e o fallback local assume
+    return { encontrou: false };
 }
 
 // ================================================================
