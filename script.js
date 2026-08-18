@@ -1,5 +1,5 @@
 // ================================================================
-// SENTINELA DA VERDADE — script.js (v11.0 - COM HARDWARE REAL)
+// SENTINELA DA VERDADE — script.js (v12.0 - DEEPSEEK API)
 // ================================================================
 
 // =================================================================
@@ -7,7 +7,7 @@
 // =================================================================
 
 const CONFIG = {
-    API_KEY: 'AIzaSyDXlbWtCTFQgx2UjOMRecfR6eiWV_aEhqE',
+    API_KEY: 'AIzaSyDXlbWtCTFQgx2UjOMRecfR6eiWV_aEhqE', // Google Fact Check Tools (não usado agora)
     API_URL: 'https://factchecktools.googleapis.com/v1alpha1/claims:search',
     SCORE_API_REF: 85,
     MAX_HISTORICO: 50,
@@ -411,23 +411,23 @@ function verificarBaseConhecimento(texto) {
 }
 
 // ================================================================
-// ANÁLISE COM IA GROQ
+// ANÁLISE COM IA DEEPSEEK
 // ================================================================
 
-const GROQ_API_KEY = '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';
+const DEEPSEEK_API_KEY = 'sk-0c9bf1c239e54b52b2f4a95b65cb9cb2';
 
 async function analisarComIA(texto) {
     try {
         exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, 'Processando...', 0, 'suspeita');
 
-        const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        const resposta = await fetch('https://api.deepseek.com/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': 'Bearer ' + GROQ_API_KEY,
+                'Authorization': 'Bearer ' + DEEPSEEK_API_KEY,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'llama-3.1-8b-instant',  // ✅ modelo atualizado
+                model: 'deepseek-chat',
                 messages: [
                     {
                         role: 'system',
@@ -443,8 +443,7 @@ async function analisarComIA(texto) {
         const dados = await resposta.json();
 
         if (!resposta.ok) {
-            console.error('❌ Erro Groq:', dados);
-            // Se a chave for inválida, mostra o erro e cai no fallback
+            console.error('❌ Erro DeepSeek:', dados);
             return { encontrou: false };
         }
 
@@ -506,7 +505,6 @@ async function analisarNoticia() {
         atualizarDashboard();
         salvarDados();
         DOM.textoNoticia.value = '';
-        // Enviar comando para Micro:bit real se conectado
         enviarParaMicrobit(resultadoIA.classificacao === 'fake' ? 'F' : resultadoIA.classificacao === 'verdadeira' ? 'V' : 'S');
         return;
     }
@@ -691,7 +689,6 @@ function enviarParaMicrobit(comando) {
 if (DOM.conectarMicro) {
     DOM.conectarMicro.addEventListener('click', function () {
         if (microConectado) {
-            // Desconectar (simples)
             microConectado = false;
             microCaracteristica = null;
             if (DOM.statusMicro) DOM.statusMicro.textContent = '🔴 Desconectado';
@@ -817,6 +814,6 @@ carregarDados();
 novaMissao();
 setInterval(salvarDados, CONFIG.AUTO_SAVE_INTERVAL);
 
-console.log('🛡️ Sentinela da Verdade v11.0 carregado!');
+console.log('🛡️ Sentinela da Verdade v12.0 carregado!');
 console.log('📚 Base:', BASE_CONHECIMENTO.length, 'fatos.');
-console.log('🔑 IA Groq: ✅ Configurada');
+console.log('🔑 IA DeepSeek: ✅ Configurada');
