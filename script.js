@@ -446,20 +446,38 @@ async function analisarComIA(texto) {
             }
 
             const conteudo = dados.choices?.[0]?.message?.content || '';
-            const jsonRegex = /\{\s*"classificacao"\s*:\s*"(verdadeira|fake|suspeita)"\s*,\s*"score"\s*:\s*(\d+(?:\.\d+)?)\s*,\s*"explicacao"\s*:\s*"([\s\S]*?)"\s*\}/i;
-            const match = conteudo.match(jsonRegex);
-            if (match) {
-                let score = parseFloat(match[2]);
-                if (score > 0 && score <= 1) score = Math.round(score * 100);
-                else score = Math.round(score);
-                return {
-                    encontrou: true,
-                    classificacao: match[1],
-                    explicacao: match[3] || 'Análise concluída.',
-                    score: score
-                };
+
+            // Extrai qualquer objeto JSON no texto
+            const inicio = conteudo.indexOf('{');
+            const fim = conteudo.lastIndexOf('}');
+            if (inicio !== -1 && fim !== -1 && fim > inicio) {
+                try {
+                    const json = JSON.parse(conteudo.substring(inicio, fim + 1));
+                    let score = json.score;
+                    if (score > 0 && score <= 1) score = Math.round(score * 100);
+                    else score = Math.round(score);
+                    return {
+                        encontrou: true,
+                        classificacao: json.classificacao || 'suspeita',
+                        explicacao: json.explicacao || 'Análise concluída.',
+                        score: score || 70
+                    };
+                } catch (e) {
+                    console.warn(`⚠️ JSON inválido do ${modelo}, tentando próximo...`);
+                    continue;
+                }
             }
-            console.warn(`⚠️ JSON não extraído do modelo ${modelo}, tentando próximo...`);
+
+            // Se não veio JSON, interpreta o texto
+            const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
+                (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
+            return {
+                encontrou: true,
+                classificacao,
+                explicacao: conteudo.substring(0, 300) || 'Análise concluída.',
+                score: 70
+            };
+
         } catch (erro) {
             console.warn(`⚠️ Erro no ${modelo}:`, erro.message);
             continue;
