@@ -446,21 +446,44 @@ async function analisarComIA(texto) {
                 continue;
             }
 
-            const conteudo = dados.choices?.[0]?.message?.content || '';
-            let json;
-            try {
-                const match = conteudo.match(/\{[\s\S]*\}/);
-                json = JSON.parse(match ? match[0] : conteudo);
-            } catch (e) {
-                const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
-                    (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
-                return {
-                    encontrou: true,
-                    classificacao,
-                    explicacao: conteudo.substring(0, 300) || 'Análise concluída.',
-                    score: 70
-                };
-            }
+            const conteudoBruto = dados.choices?.[0]?.message?.content || '';
+const conteudo = conteudoBruto.replace(/```json/gi, '').replace(/```/g, '').trim();
+let json;
+try {
+    const inicio = conteudo.indexOf('{');
+    const fim = conteudo.lastIndexOf('}');
+    if (inicio !== -1 && fim !== -1 && fim > inicio) {
+        json = JSON.parse(conteudo.substring(inicio, fim + 1));
+    } else {
+        throw new Error('JSON não encontrado');
+    }
+} catch (e) {
+    const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
+        (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
+    return {
+        encontrou: true,
+        classificacao,
+        explicacao: conteudo.substring(0, 300) || 'Análise concluída.',
+        score: 70
+    };
+}
+
+// Normaliza o score (0.95 → 95)
+let scoreFinal = 70;
+if (typeof json.score === 'number') {
+    if (json.score > 0 && json.score <= 1) {
+        scoreFinal = Math.round(json.score * 100);
+    } else {
+        scoreFinal = Math.round(json.score);
+    }
+}
+
+return {
+    encontrou: true,
+    classificacao: json.classificacao || 'suspeita',
+    explicacao: json.explicacao || 'Análise concluída.',
+    score: scoreFinal
+};
 
             return {
                 encontrou: true,
