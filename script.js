@@ -408,75 +408,75 @@ function verificarBaseConhecimento(texto) {
 
 async function analisarComIA(texto) {
     const GROQ_API_KEY = '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';
-    try {
-        // Busca dinamicamente os modelos disponíveis
-        const respostaModelos = await fetch('https://api.groq.com/openai/v1/models', {
-            headers: { 'Authorization': 'Bearer ' + GROQ_API_KEY }
-        });
-        const dadosModelos = await respostaModelos.json();
-        const modelos = dadosModelos.data ? dadosModelos.data.map(m => m.id) : [];
+    
+    // Modelos preferidos (testados e funcionais na tua conta)
+    const modelosPreferidos = [
+        'groq/compound-mini',
+        'openai/gpt-oss-20b',
+        'qwen/qwen3.6-27b'
+    ];
 
-        // Filtra apenas modelos de chat (exclui áudio, tts e guard)
-        const modelosChat = modelos.filter(id => 
-            !/tts|whisper|audio|prompt-guard|safeguard/i.test(id)
-        );
+    // Tenta modelos preferidos primeiro
+    for (const modelo of modelosPreferidos) {
+        try {
+            exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, `Usando ${modelo}...`, 0, 'suspeita');
 
-        for (const modelo of modelosChat) {
+            const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + GROQ_API_KEY,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: modelo,
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `Você é um verificador de fatos. Analise a afirmação e classifique como "verdadeira", "fake" ou "suspeita". Responda APENAS com um JSON no formato: {"classificacao":"verdadeira|fake|suspeita", "score":0-100, "explicacao":"texto curto em português"}`
+                        },
+                        { role: 'user', content: texto }
+                    ],
+                    temperature: 0.2,
+                    max_tokens: 300
+                })
+            });
+
+            const dados = await resposta.json();
+            if (!resposta.ok) {
+                console.warn(`⚠️ ${modelo} falhou:`, dados.error?.message);
+                continue; // tenta o próximo modelo
+            }
+
+            const conteudo = dados.choices?.[0]?.message?.content || '';
+            let json;
             try {
-                exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, `Usando ${modelo}...`, 0, 'suspeita');
-
-                const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': 'Bearer ' + GROQ_API_KEY,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        model: modelo,
-                        messages: [
-                            {
-                                role: 'system',
-                                content: 'Classifique a notícia como verdadeira, fake ou suspeita. Responda apenas com JSON: {"classificacao":"...", "score":0, "explicacao":"..."}'
-                            },
-                            { role: 'user', content: texto }
-                        ],
-                        temperature: 0.3,
-                        max_tokens: 200
-                    })
-                });
-
-                const dados = await resposta.json();
-                if (!resposta.ok) {
-                    console.warn(`⚠️ ${modelo} falhou:`, dados.error?.message);
-                    continue;
-                }
-
-                const conteudo = dados.choices?.[0]?.message?.content || '';
-                let json;
-                try {
-                    const match = conteudo.match(/\{[\s\S]*\}/);
-                    json = JSON.parse(match ? match[0] : conteudo);
-                } catch (e) {
-                    const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
-                        (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
-                    return { encontrou: true, classificacao, explicacao: conteudo.substring(0, 300), score: 70 };
-                }
+                const match = conteudo.match(/\{[\s\S]*\}/);
+                json = JSON.parse(match ? match[0] : conteudo);
+            } catch (e) {
+                // Se não veio JSON, interpreta texto simples
+                const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
+                    (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
                 return {
                     encontrou: true,
-                    classificacao: json.classificacao || 'suspeita',
-                    explicacao: json.explicacao || 'Análise concluída.',
-                    score: json.score || 70
+                    classificacao,
+                    explicacao: conteudo.substring(0, 300) || 'Análise concluída.',
+                    score: 70
                 };
-            } catch (erro) {
-                console.warn(`⚠️ Erro no ${modelo}:`, erro.message);
-                continue;
             }
+
+            return {
+                encontrou: true,
+                classificacao: json.classificacao || 'suspeita',
+                explicacao: json.explicacao || 'Análise concluída.',
+                score: json.score || 70
+            };
+        } catch (erro) {
+            console.warn(`⚠️ Erro no ${modelo}:`, erro.message);
+            continue;
         }
-    } catch (e) {
-        console.warn('⚠️ Falha ao obter modelos Groq:', e.message);
     }
 
-    // Google Fact Check Tools (API real)
+    // Se nenhum modelo preferido funcionou, tenta Google Fact Check Tools
     try {
         exibirResultado('🧠', 'Consultando Google Fact Check...', '#2563eb', texto, 'Verificando base...', 0, 'suspeita');
         const url = `https://factchecktools.googleapis.com/v1alpha1/claims:search?query=${encodeURIComponent(texto)}&key=${CONFIG.API_KEY}`;
@@ -506,7 +506,22 @@ async function analisarComIA(texto) {
         console.warn('⚠️ Google Fact Check falhou:', e.message);
     }
 
-    return { encontrou: false };
+    // Fallback final: não retorna suspeita vazia, faz análise local com melhor explicação
+    const scoreLocal = calcularScoreLocal(texto);
+    let classificacaoLocal = 'suspeita';
+    if (scoreLocal < 40) classificacaoLocal = 'fake';
+    else if (scoreLocal >= 70) classificacaoLocal = 'verdadeira';
+    const explicacaoLocal = `Análise local (IA indisponível): ${scoreLocal}% de confiança. ` +
+        (classificacaoLocal === 'fake' ? 'Palavras suspeitas encontradas.' :
+         classificacaoLocal === 'verdadeira' ? 'Fontes confiáveis detectadas.' :
+         'Sem fontes claras para afirmar.');
+
+    return {
+        encontrou: true,
+        classificacao: classificacaoLocal,
+        explicacao: explicacaoLocal,
+        score: scoreLocal
+    };
 }
 
 function analisarLocalComScore(texto, score) {
