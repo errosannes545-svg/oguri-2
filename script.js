@@ -466,39 +466,6 @@ async function analisarComIA(texto) {
         }
     }
 
-    // Se falhar, tenta Google Fact Check
-    try {
-        exibirResultado('🧠', 'Consultando Google Fact Check...', '#2563eb', texto, 'Verificando base...', 0, 'suspeita');
-        const url = `https://factchecktools.googleapis.com/v1alpha1/claims:search?query=${encodeURIComponent(texto)}&key=${CONFIG.API_KEY}`;
-        const respostaGoogle = await fetch(url);
-        const dadosGoogle = await respostaGoogle.json();
-
-        if (respostaGoogle.ok && dadosGoogle.claims && dadosGoogle.claims.length > 0) {
-            const claim = dadosGoogle.claims[0];
-            const review = claim.claimReview?.[0];
-            const rating = review?.textualRating || '';
-            const publisher = review?.publisher?.name || 'Agência de fact-checking';
-
-            let classificacao = 'suspeita';
-            let score = 70;
-            if (/false|falso|mentira|fake|enganoso|incorreto|impreciso/i.test(rating)) {
-                classificacao = 'fake';
-                score = 90;
-            } else if (/true|verdade|correto|verdadeiro|real|preciso/i.test(rating)) {
-                classificacao = 'verdadeira';
-                score = 95;
-            }
-
-            const explicacao = `🔍 ${claim.text || 'Alegação verificada'} — ${rating} (${publisher})`;
-            return { encontrou: true, classificacao, explicacao, score };
-        }
-    } catch (e) {
-        console.warn('⚠️ Google Fact Check falhou:', e.message);
-    }
-
-    return { encontrou: false };
-}
-
 function analisarLocalComScore(texto, score) {
     let classificacao = 'suspeita';
     if (score < 40) classificacao = 'fake';
