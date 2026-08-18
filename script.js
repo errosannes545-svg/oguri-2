@@ -438,15 +438,15 @@ async function analisarComIA(texto) {
         const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${GROQ_API_KEY}`,
+                'Authorization': 'Bearer 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',
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'llama3-70b-8192',
+                model: 'llama3-8b-8192',
                 messages: [
                     {
                         role: 'system',
-                        content: 'Você é um verificador de fatos. Analise a notícia e responda APENAS com JSON: {"classificacao": "verdadeira/fake/suspeita", "score": 0-100, "explicacao": "texto em português"}'
+                        content: 'Classifique a notícia como verdadeira, fake ou suspeita. Responda apenas com um objeto JSON: {"classificacao": "verdadeira/fake/suspeita", "score": 0-100, "explicacao": "texto em português"}'
                     },
                     {
                         role: 'user',
@@ -454,9 +454,47 @@ async function analisarComIA(texto) {
                     }
                 ],
                 temperature: 0.3,
-                max_tokens: 300
+                max_tokens: 200
             })
         });
+
+        const dados = await resposta.json();
+
+        if (!resposta.ok) {
+            console.error('❌ Detalhes do erro da Groq:', dados);
+            return { encontrou: false };
+        }
+
+        const conteudo = dados.choices[0].message.content;
+        console.log('🧠 IA respondeu:', conteudo);
+
+        let json;
+        try {
+            const match = conteudo.match(/\{[\s\S]*\}/);
+            json = JSON.parse(match ? match[0] : conteudo);
+        } catch (e) {
+            const classificacao = conteudo.includes('verdade') ? 'verdadeira' :
+                (conteudo.includes('fake') || conteudo.includes('falso')) ? 'fake' : 'suspeita';
+            return {
+                encontrou: true,
+                classificacao: classificacao,
+                explicacao: conteudo.substring(0, 300),
+                score: 70
+            };
+        }
+
+        return {
+            encontrou: true,
+            classificacao: json.classificacao || 'suspeita',
+            explicacao: json.explicacao || 'Análise concluída.',
+            score: json.score || 70
+        };
+
+    } catch (erro) {
+        console.error('❌ Erro na IA:', erro.message);
+        return { encontrou: false };
+    }
+}
 
         if (!resposta.ok) {
             console.warn('⚠️ Erro na API:', resposta.status);
