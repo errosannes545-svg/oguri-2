@@ -418,7 +418,7 @@ const GROQ_API_KEY = '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';
 
 async function analisarComIA(texto) {
     try {
-        exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, 'Processando com Groq...', 0, 'suspeita');
+        exibirResultado('🧠', 'Analisando com IA...', '#2563eb', texto, 'Processando...', 0, 'suspeita');
 
         const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
@@ -427,11 +427,11 @@ async function analisarComIA(texto) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'llama3-8b-8192',
+                model: 'llama-3.1-8b-instant',  // ✅ modelo atualizado
                 messages: [
                     {
                         role: 'system',
-                        content: 'Classifique a notícia como verdadeira, fake ou suspeita. Responda apenas com um objeto JSON: {"classificacao": "verdadeira/fake/suspeita", "score": 0-100, "explicacao": "texto em português"}'
+                        content: 'Classifique a notícia como verdadeira, fake ou suspeita. Responda apenas com JSON: {"classificacao":"...", "score":0, "explicacao":"..."}'
                     },
                     { role: 'user', content: texto }
                 ],
@@ -441,12 +441,15 @@ async function analisarComIA(texto) {
         });
 
         const dados = await resposta.json();
+
         if (!resposta.ok) {
             console.error('❌ Erro Groq:', dados);
+            // Se a chave for inválida, mostra o erro e cai no fallback
             return { encontrou: false };
         }
 
         const conteudo = dados.choices?.[0]?.message?.content || '';
+
         let json;
         try {
             const match = conteudo.match(/\{[\s\S]*\}/);
@@ -468,6 +471,7 @@ async function analisarComIA(texto) {
             explicacao: json.explicacao || 'Análise concluída.',
             score: json.score || 70
         };
+
     } catch (erro) {
         console.error('❌ Erro IA:', erro.message);
         return { encontrou: false };
