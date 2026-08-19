@@ -685,8 +685,22 @@ function responderMissao(resposta) {
 // --- Makey Makey (teclado real) ---
 document.addEventListener('keydown', function (e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
     const tecla = e.key.toLowerCase();
-    const mapa = { 'a': 'btnVerdade', 's': 'btnSuspeita', 'd': 'btnFake', 'n': 'novaMissao' };
+    const mapa = {
+        // Letras (pinos de trás)
+        'a': 'btnVerdade',
+        's': 'btnSuspeita',
+        'd': 'btnFake',
+        'n': 'novaMissao',
+        // Setas (pads da frente)
+        'arrowup': 'btnVerdade',
+        'arrowdown': 'btnSuspeita',
+        'arrowright': 'btnFake',
+        'arrowleft': 'novaMissao',
+        ' ': 'novaMissao'
+    };
+
     if (mapa[tecla]) {
         const btn = document.getElementById(mapa[tecla]);
         if (btn) {
@@ -694,10 +708,11 @@ document.addEventListener('keydown', function (e) {
             setTimeout(() => btn.style.transform = '', 200);
         }
     }
-    if (tecla === 'a') responderMissao('verdadeira');
-    else if (tecla === 's') responderMissao('suspeita');
-    else if (tecla === 'd') responderMissao('fake');
-    else if (tecla === 'n') novaMissao();
+
+    if (tecla === 'a' || tecla === 'arrowup') responderMissao('verdadeira');
+    else if (tecla === 's' || tecla === 'arrowdown') responderMissao('suspeita');
+    else if (tecla === 'd' || tecla === 'arrowright') responderMissao('fake');
+    else if (tecla === 'n' || tecla === 'arrowleft' || tecla === ' ') novaMissao();
 });
 
 // --- Micro:bit Real (Web Bluetooth) ---
@@ -767,23 +782,40 @@ if (DOM.conectarSphero) {
 
 function moverSphero(dir) {
     if (!spheroConectado) { alert('Conecte o Sphero!'); return; }
-    const passo = 25;
-    if (dir === 'frente') spheroY -= passo;
-    else if (dir === 'tras') spheroY += passo;
-    else if (dir === 'esquerda') spheroX -= passo;
-    else if (dir === 'direita') spheroX += passo;
-    const sim = document.getElementById('spheroSim');
-    if (sim) sim.style.transform = 'translate(' + spheroX + 'px, ' + spheroY + 'px)';
+
+    // Tenta servidor real primeiro
+    fetch(`http://localhost:3000/mover/${dir}`)
+        .then(res => {
+            if (!res.ok) throw new Error('Servidor falhou');
+            console.log('✅ Sphero real movendo:', dir);
+        })
+        .catch(() => {
+            // Fallback para simulação
+            const passo = 25;
+            if (dir === 'frente') spheroY -= passo;
+            else if (dir === 'tras') spheroY += passo;
+            else if (dir === 'esquerda') spheroX -= passo;
+            else if (dir === 'direita') spheroX += passo;
+            const sim = document.getElementById('spheroSim');
+            if (sim) sim.style.transform = 'translate(' + spheroX + 'px, ' + spheroY + 'px)';
+        });
 }
 
 function mudarCorSphero(cor) {
     if (!spheroConectado) return;
-    const el = document.getElementById('spheroSim');
-    if (!el) return;
-    el.style.background = cor;
-    setTimeout(() => { if (spheroConectado) el.style.background = '#2563eb'; }, 2000);
-}
 
+    fetch(`http://localhost:3000/cor/${cor}`)
+        .then(res => {
+            if (!res.ok) throw new Error('Servidor falhou');
+            console.log('🎨 Sphero real mudou para', cor);
+        })
+        .catch(() => {
+            const el = document.getElementById('spheroSim');
+            if (!el) return;
+            el.style.background = cor;
+            setTimeout(() => { if (spheroConectado) el.style.background = '#2563eb'; }, 2000);
+        });
+}
 // ================================================================
 // EVENTOS E INICIALIZAÇÃO
 // ================================================================
